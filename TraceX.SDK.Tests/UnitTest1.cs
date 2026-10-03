@@ -8,11 +8,14 @@ namespace TraceX.SDK.Tests;
 public class UnitTest1
 {
     [Fact]
-    public async Task TraceXMiddleware_PropagatesUnhandledException()
+    public async Task TraceXMiddleware_CapturesUnhandledException()
     {
         // Arrange
+        var client = new TraceXClient();
+
         var middleware = new TraceXMiddleware(
-            _ => throw new InvalidOperationException("Test exception"));
+            _ => throw new InvalidOperationException("Test exception"),
+            client);
 
         var context = new DefaultHttpContext();
 
