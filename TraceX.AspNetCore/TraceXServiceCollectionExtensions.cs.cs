@@ -15,11 +15,7 @@ public static class TraceXServiceCollectionExtensions
         options.Validate();
 
         services.AddSingleton(options);
-
-        var client = new TraceXClient();
-        client.RegisterGlobalExceptionHooks();
-
-        services.AddSingleton(client);
+        services.AddSingleton<TraceXClient>();
 
         services.AddExceptionHandler<TraceXExceptionHandler>();
 
