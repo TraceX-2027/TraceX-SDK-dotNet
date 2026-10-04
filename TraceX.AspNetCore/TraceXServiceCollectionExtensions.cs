@@ -16,10 +16,18 @@ public static class TraceXServiceCollectionExtensions
 
         services.AddSingleton(options);
 
-        var client = new TraceXClient();
-        client.RegisterGlobalExceptionHooks();
+        services.AddSingleton(sp =>
+        {
+            var configuredOptions =
+                sp.GetRequiredService<TraceXOptions>();
 
-        services.AddSingleton(client);
+            var client =
+                new TraceXClient(configuredOptions);
+
+            client.RegisterGlobalExceptionHooks();
+
+            return client;
+        });
 
         services.AddExceptionHandler<TraceXExceptionHandler>();
 

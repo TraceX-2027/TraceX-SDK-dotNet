@@ -5,6 +5,9 @@ namespace TraceX.AspNetCore;
 
 public class TraceXMiddleware
 {
+    public const string ExceptionCapturedItemKey =
+        "TraceX.ExceptionCaptured";
+
     private readonly RequestDelegate _next;
     private readonly TraceXClient _client;
 
@@ -25,6 +28,9 @@ public class TraceXMiddleware
         catch (Exception exception)
         {
             _client.CaptureException(exception);
+
+            context.Items[ExceptionCapturedItemKey] = true;
+
             throw;
         }
     }
