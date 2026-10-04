@@ -4,57 +4,41 @@ namespace TraceX.Core;
 
 public sealed class TraceXClient
 {
-    private bool _hooksRegistered;
+    private int _hooksRegistered;
 
-    private readonly Channel<CrashEventRequest> _telemetryChannel =
-        Channel.CreateBounded<CrashEventRequest>(
-            new BoundedChannelOptions(500)
-            {
-                FullMode = BoundedChannelFullMode.DropOldest,
-                SingleReader = true,
-                SingleWriter = false
-            });
+    private readonly TraceXOptions _options;
 
-    private readonly OfflineBuffer _offlineBuffer;
-    private readonly TelemetryDispatcher _dispatcher;
+    internal event Action<Exception>? ExceptionCaptured;
 
     public TraceXClient(TraceXOptions options)
     {
-        var httpClient = new HttpClient();
+        ArgumentNullException.ThrowIfNull(options);
 
-        var sender = new TelemetrySender(
-            httpClient,
-            options);
-
-        _offlineBuffer = new OfflineBuffer();
-
-        _dispatcher = new TelemetryDispatcher(
-            _telemetryChannel,
-            sender,
-            _offlineBuffer);
-
-        _ = Task.Run(
-            () => _dispatcher.RunAsync(CancellationToken.None));
+        _options = options;
     }
 
     public void RegisterGlobalExceptionHooks()
     {
-        if (_hooksRegistered)
+        if (Interlocked.Exchange(
+                ref _hooksRegistered,
+                1) != 0)
         {
             return;
         }
 
-        AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
-        TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
+        AppDomain.CurrentDomain.UnhandledException +=
+            OnUnhandledException;
 
-        _hooksRegistered = true;
+        TaskScheduler.UnobservedTaskException +=
+            OnUnobservedTaskException;
     }
 
     private void OnUnhandledException(
         object sender,
         UnhandledExceptionEventArgs e)
     {
-        var exception = e.ExceptionObject as Exception;
+        var exception =
+            e.ExceptionObject as Exception;
 
         if (exception is null)
         {
@@ -75,18 +59,10 @@ public sealed class TraceXClient
 
     public void CaptureException(Exception exception)
     {
-        var crash = new CrashEventRequest
-        {
-            OccurredAt = DateTime.UtcNow,
-            Platform = "dotnet",
-            Language = "csharp",
-            ExceptionType =
-                exception.GetType().FullName ??
-                exception.GetType().Name,
-            ErrorMessage = exception.Message,
-            StackTrace = exception.ToString()
-        };
+        ArgumentNullException.ThrowIfNull(exception);
 
-        _telemetryChannel.Writer.TryWrite(crash);
+        ExceptionCaptured?.Invoke(exception);
+
+        // Crash capture will be connected to the telemetry dispatcher later.
     }
 }
