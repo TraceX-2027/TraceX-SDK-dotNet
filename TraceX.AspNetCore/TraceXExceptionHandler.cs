@@ -18,7 +18,14 @@ public sealed class TraceXExceptionHandler : IExceptionHandler
         Exception exception,
         CancellationToken cancellationToken)
     {
-        _client.CaptureException(exception);
+        if (!httpContext.Items.ContainsKey(
+                TraceXMiddleware.ExceptionCapturedItemKey))
+        {
+            _client.CaptureException(exception);
+
+            httpContext.Items[
+                TraceXMiddleware.ExceptionCapturedItemKey] = true;
+        }
 
         await Task.CompletedTask;
 

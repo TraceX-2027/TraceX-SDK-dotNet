@@ -19,10 +19,12 @@ public sealed class TraceXOptions
                 "TraceX ProjectKey is required. Configure a valid ProjectKey before starting the application.");
         }
 
-        if (!ProjectKey.StartsWith("pk_", StringComparison.Ordinal))
+        if (!ProjectKey.StartsWith(
+                "tracex_live_",
+                StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
-                "TraceX ProjectKey is malformed. It must start with 'pk_'.");
+                "TraceX ProjectKey is malformed. It must start with 'tracex_live_'.");
         }
 
         if (string.IsNullOrWhiteSpace(Endpoint))
