@@ -155,6 +155,10 @@ public sealed class TelemetrySender
                 HttpMethod.Post,
                 endpoint);
 
+        request.Options.Set(
+            TraceXHttpDependencyInstrumentation.InternalRequestKey,
+            true);
+
         request.Headers.Add(
             "X-TraceX-Key",
             _options.ProjectKey);

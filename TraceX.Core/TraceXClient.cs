@@ -23,6 +23,8 @@ public sealed class TraceXClient : IDisposable, IAsyncDisposable
 
         _options = options;
 
+        TraceXHttpDependencyInstrumentation.EnsureStarted();
+
         _channel =
             Channel.CreateBounded<CrashEventRequest>(
                 new BoundedChannelOptions(500)
