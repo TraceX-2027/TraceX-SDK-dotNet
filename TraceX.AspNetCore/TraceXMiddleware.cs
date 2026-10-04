@@ -19,7 +19,8 @@ public class TraceXMiddleware
         _client = client;
     }
 
-    public async Task InvokeAsync(HttpContext context)
+    public async Task InvokeAsync(
+        HttpContext context)
     {
         try
         {
@@ -27,9 +28,15 @@ public class TraceXMiddleware
         }
         catch (Exception exception)
         {
-            _client.CaptureException(exception);
+            if (!context.Items.ContainsKey(
+                    ExceptionCapturedItemKey))
+            {
+                _client.CaptureException(
+                    exception);
 
-            context.Items[ExceptionCapturedItemKey] = true;
+                context.Items[
+                    ExceptionCapturedItemKey] = true;
+            }
 
             throw;
         }
