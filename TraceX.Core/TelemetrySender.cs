@@ -26,77 +26,78 @@ public sealed class TelemetrySender
         CrashEventRequest crash,
         CancellationToken cancellationToken)
     {
-        var endpoint = $"{_options.Endpoint.TrimEnd('/')}/crashes";
+        var endpoint =
+            $"{_options.Endpoint.TrimEnd('/')}/crashes";
 
-        var json = JsonSerializer.Serialize(crash);
-        var jsonBytes = Encoding.UTF8.GetBytes(json);
+        var json =
+            JsonSerializer.Serialize(crash);
+
+        var jsonBytes =
+            Encoding.UTF8.GetBytes(json);
 
         for (var attempt = 0; attempt <= MaxRetries; attempt++)
         {
-            try
-            {
-                using var request = CreateRequest(
+            using var request =
+                CreateRequest(
                     endpoint,
                     jsonBytes);
 
-                using var response = await _httpClient.SendAsync(
+            using var response =
+                await _httpClient.SendAsync(
                     request,
                     cancellationToken);
 
-                if (response.IsSuccessStatusCode)
-                {
-                    return;
-                }
-
-                if (response.StatusCode == HttpStatusCode.Unauthorized)
-                {
-                    return;
-                }
-
-                if (response.StatusCode == HttpStatusCode.TooManyRequests)
-                {
-                    if (attempt == MaxRetries)
-                    {
-                        return;
-                    }
-
-                    await WaitForRetryAfterAsync(
-                        response,
-                        cancellationToken);
-
-                    continue;
-                }
-
-                if (response.StatusCode == HttpStatusCode.ServiceUnavailable)
-                {
-                    if (attempt == MaxRetries)
-                    {
-                        throw new HttpRequestException(
-                            "TraceX API returned HTTP 503 after all retry attempts.",
-                            null,
-                            response.StatusCode);
-                    }
-
-                    await WaitWithBackoffAsync(
-                        attempt,
-                        cancellationToken);
-
-                    continue;
-                }
-
+            if (response.IsSuccessStatusCode)
+            {
                 return;
             }
-            catch (HttpRequestException)
+
+            if (response.StatusCode ==
+                HttpStatusCode.Unauthorized)
+            {
+                return;
+            }
+
+            if (response.StatusCode ==
+                HttpStatusCode.TooManyRequests)
             {
                 if (attempt == MaxRetries)
                 {
-                    throw;
+                    throw new HttpRequestException(
+                        "TraceX API returned HTTP 429 after all retry attempts.",
+                        null,
+                        response.StatusCode);
+                }
+
+                await WaitForRetryAfterAsync(
+                    response,
+                    cancellationToken);
+
+                continue;
+            }
+
+            var statusCode =
+                (int)response.StatusCode;
+
+            if (statusCode >= 500 &&
+                statusCode <= 599)
+            {
+                if (attempt == MaxRetries)
+                {
+                    throw new HttpRequestException(
+                        $"TraceX API returned HTTP {statusCode} after all retry attempts.",
+                        null,
+                        response.StatusCode);
                 }
 
                 await WaitWithBackoffAsync(
                     attempt,
                     cancellationToken);
+
+                continue;
             }
+
+            return;
         }
     }
 
@@ -104,21 +105,25 @@ public sealed class TelemetrySender
         string endpoint,
         byte[] jsonBytes)
     {
-        var request = new HttpRequestMessage(
-            HttpMethod.Post,
-            endpoint);
+        var request =
+            new HttpRequestMessage(
+                HttpMethod.Post,
+                endpoint);
 
         request.Headers.Add(
             "X-TraceX-Key",
             _options.ProjectKey);
 
-        if (jsonBytes.Length > CompressionThresholdBytes)
+        if (jsonBytes.Length >
+            CompressionThresholdBytes)
         {
-            request.Content = CreateGzipContent(jsonBytes);
+            request.Content =
+                CreateGzipContent(jsonBytes);
         }
         else
         {
-            request.Content = new ByteArrayContent(jsonBytes);
+            request.Content =
+                new ByteArrayContent(jsonBytes);
 
             request.Content.Headers.ContentType =
                 new System.Net.Http.Headers.MediaTypeHeaderValue(
@@ -132,7 +137,8 @@ public sealed class TelemetrySender
         HttpResponseMessage response,
         CancellationToken cancellationToken)
     {
-        var retryAfter = response.Headers.RetryAfter;
+        var retryAfter =
+            response.Headers.RetryAfter;
 
         if (retryAfter?.Delta is TimeSpan delta)
         {
@@ -145,7 +151,8 @@ public sealed class TelemetrySender
 
         if (retryAfter?.Date is DateTimeOffset date)
         {
-            var delay = date - DateTimeOffset.UtcNow;
+            var delay =
+                date - DateTimeOffset.UtcNow;
 
             if (delay > TimeSpan.Zero)
             {
@@ -179,27 +186,37 @@ public sealed class TelemetrySender
             cancellationToken);
     }
 
-    private static HttpContent CreateGzipContent(byte[] data)
+    private static HttpContent CreateGzipContent(
+        byte[] data)
     {
-        using var compressedStream = new MemoryStream();
+        using var compressedStream =
+            new MemoryStream();
 
-        using (var gzipStream = new GZipStream(
-            compressedStream,
-            CompressionMode.Compress,
-            leaveOpen: true))
+        using (var gzipStream =
+            new GZipStream(
+                compressedStream,
+                CompressionMode.Compress,
+                leaveOpen: true))
         {
-            gzipStream.Write(data, 0, data.Length);
+            gzipStream.Write(
+                data,
+                0,
+                data.Length);
         }
 
-        var compressedBytes = compressedStream.ToArray();
+        var compressedBytes =
+            compressedStream.ToArray();
 
-        var content = new ByteArrayContent(compressedBytes);
+        var content =
+            new ByteArrayContent(
+                compressedBytes);
 
         content.Headers.ContentType =
             new System.Net.Http.Headers.MediaTypeHeaderValue(
                 "application/json");
 
-        content.Headers.ContentEncoding.Add("gzip");
+        content.Headers.ContentEncoding.Add(
+            "gzip");
 
         return content;
     }

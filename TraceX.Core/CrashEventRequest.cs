@@ -1,4 +1,6 @@
-﻿using System.Text.Json.Serialization;
+﻿using System;
+using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace TraceX.Core;
 
@@ -21,4 +23,10 @@ public sealed class CrashEventRequest
 
     [JsonPropertyName("stack_trace")]
     public string StackTrace { get; init; } = string.Empty;
+
+    [JsonPropertyName("environment")]
+    public CrashEnvironment Environment { get; init; } = new();
+
+    [JsonPropertyName("breadcrumbs")]
+    public List<CrashBreadcrumb> Breadcrumbs { get; init; } = [];
 }
