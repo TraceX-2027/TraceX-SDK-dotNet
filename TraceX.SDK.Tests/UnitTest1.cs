@@ -1,5 +1,7 @@
-﻿using System.Net;
+﻿using System.IO.Compression;
+using System.Net;
 using System.Net.Http;
+using System.Text;
 using System.Threading.Channels;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,37 +16,72 @@ public class UnitTest1
     {
         return new TraceXOptions
         {
-            ProjectKey = "tracex_live_test123"
+            ProjectKey =
+                "tracex_live_test123"
         };
     }
 
-    private static CrashEventRequest CreateCrash()
+    private static CrashEventRequest CreateCrash(
+        string errorMessage = "Test exception")
     {
         return new CrashEventRequest
         {
-            OccurredAt = DateTime.UtcNow,
-            Platform = "dotnet",
-            Language = "csharp",
-            ExceptionType = "System.Exception",
-            ErrorMessage = "Test exception",
-            StackTrace = "Test stack trace",
-            Environment = new CrashEnvironment
-            {
-                RuntimeVersion = ".NET 9",
-                OsName = "Test OS",
-                OsVersion = "1.0",
-                Hostname = "test-host",
-                ProcessMemoryBytes = 12345,
-                EnvironmentName = "Test"
-            },
-            Breadcrumbs = []
+            OccurredAt =
+                DateTime.UtcNow,
+
+            Platform =
+                "dotnet",
+
+            Language =
+                "csharp",
+
+            ExceptionType =
+                "System.Exception",
+
+            ErrorMessage =
+                errorMessage,
+
+            StackTrace =
+                "Test stack trace",
+
+            Environment =
+                new CrashEnvironment
+                {
+                    AppVersion =
+                        "1.0.0",
+
+                    DeviceModel =
+                        "test-device",
+
+                    RuntimeVersion =
+                        ".NET 10",
+
+                    OsName =
+                        "Test OS",
+
+                    OsVersion =
+                        "1.0",
+
+                    Hostname =
+                        "test-host",
+
+                    ProcessMemoryBytes =
+                        12345,
+
+                    EnvironmentName =
+                        "Test"
+                },
+
+            Breadcrumbs =
+                []
         };
     }
 
     [Fact]
     public async Task TraceXMiddleware_CapturesUnhandledException()
     {
-        var options = CreateTestOptions();
+        var options =
+            CreateTestOptions();
 
         using var client =
             new TraceXClient(options);
@@ -57,7 +94,8 @@ public class UnitTest1
 
         client.ExceptionCaptured += exception =>
         {
-            capturedException = exception;
+            capturedException =
+                exception;
         };
 
         var middleware =
@@ -68,7 +106,8 @@ public class UnitTest1
         var context =
             new DefaultHttpContext();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<
+            InvalidOperationException>(
             () => middleware.InvokeAsync(context));
 
         Assert.Same(
@@ -126,12 +165,14 @@ public class UnitTest1
         var services =
             new ServiceCollection();
 
-        Assert.Throws<InvalidOperationException>(() =>
-            services.AddTraceX(options =>
-            {
-                options.ProjectKey =
-                    string.Empty;
-            }));
+        Assert.Throws<InvalidOperationException>(
+            () =>
+                services.AddTraceX(
+                    options =>
+                    {
+                        options.ProjectKey =
+                            string.Empty;
+                    }));
     }
 
     [Fact]
@@ -184,9 +225,7 @@ public class UnitTest1
     public void OfflineBuffer_EnqueueAndDequeue_Works()
     {
         var filePath =
-            Path.Combine(
-                Path.GetTempPath(),
-                $"tracex-test-{Guid.NewGuid():N}.json");
+            CreateTempFilePath();
 
         try
         {
@@ -196,7 +235,8 @@ public class UnitTest1
             var crash =
                 CreateCrash();
 
-            buffer.Enqueue(crash);
+            buffer.Enqueue(
+                crash);
 
             Assert.Equal(
                 1,
@@ -220,10 +260,59 @@ public class UnitTest1
         }
         finally
         {
-            if (File.Exists(filePath))
-            {
-                File.Delete(filePath);
-            }
+            DeleteFileIfExists(
+                filePath);
+        }
+    }
+
+    [Fact]
+    public void OfflineBuffer_LoadsPersistedCrashesOnStartup()
+    {
+        var filePath =
+            CreateTempFilePath();
+
+        try
+        {
+            var firstBuffer =
+                new OfflineBuffer(
+                    filePath);
+
+            var crash =
+                CreateCrash(
+                    "Persisted crash");
+
+            firstBuffer.Enqueue(
+                crash);
+
+            Assert.Equal(
+                1,
+                firstBuffer.Count);
+
+            var secondBuffer =
+                new OfflineBuffer(
+                    filePath);
+
+            Assert.Equal(
+                1,
+                secondBuffer.Count);
+
+            var result =
+                secondBuffer.TryDequeue(
+                    out var restoredCrash);
+
+            Assert.True(result);
+
+            Assert.NotNull(
+                restoredCrash);
+
+            Assert.Equal(
+                "Persisted crash",
+                restoredCrash!.ErrorMessage);
+        }
+        finally
+        {
+            DeleteFileIfExists(
+                filePath);
         }
     }
 
@@ -231,12 +320,11 @@ public class UnitTest1
     public async Task TelemetryDispatcher_SendsQueuedCrash()
     {
         var channel =
-            Channel.CreateUnbounded<CrashEventRequest>();
+            Channel.CreateUnbounded<
+                CrashEventRequest>();
 
         var filePath =
-            Path.Combine(
-                Path.GetTempPath(),
-                $"tracex-test-{Guid.NewGuid():N}.json");
+            CreateTempFilePath();
 
         try
         {
@@ -244,7 +332,8 @@ public class UnitTest1
                 CreateTestOptions();
 
             var offlineBuffer =
-                new OfflineBuffer(filePath);
+                new OfflineBuffer(
+                    filePath);
 
             using var httpClient =
                 new HttpClient(
@@ -279,10 +368,8 @@ public class UnitTest1
         }
         finally
         {
-            if (File.Exists(filePath))
-            {
-                File.Delete(filePath);
-            }
+            DeleteFileIfExists(
+                filePath);
         }
     }
 
@@ -290,12 +377,11 @@ public class UnitTest1
     public async Task TelemetryDispatcher_BuffersFailedCrash()
     {
         var channel =
-            Channel.CreateUnbounded<CrashEventRequest>();
+            Channel.CreateUnbounded<
+                CrashEventRequest>();
 
         var filePath =
-            Path.Combine(
-                Path.GetTempPath(),
-                $"tracex-test-{Guid.NewGuid():N}.json");
+            CreateTempFilePath();
 
         try
         {
@@ -303,7 +389,8 @@ public class UnitTest1
                 CreateTestOptions();
 
             var offlineBuffer =
-                new OfflineBuffer(filePath);
+                new OfflineBuffer(
+                    filePath);
 
             using var httpClient =
                 new HttpClient(
@@ -334,10 +421,8 @@ public class UnitTest1
         }
         finally
         {
-            if (File.Exists(filePath))
-            {
-                File.Delete(filePath);
-            }
+            DeleteFileIfExists(
+                filePath);
         }
     }
 
@@ -370,12 +455,231 @@ public class UnitTest1
             handler.RequestCount);
     }
 
+    [Fact]
+    public async Task TelemetrySender_RetriesTransportFailures()
+    {
+        var options =
+            CreateTestOptions();
+
+        var handler =
+            new SequenceHttpMessageHandler(
+                new HttpRequestException(
+                    "Temporary network failure."),
+
+                new HttpRequestException(
+                    "Temporary network failure."),
+
+                HttpStatusCode.OK);
+
+        using var httpClient =
+            new HttpClient(handler);
+
+        var sender =
+            new TelemetrySender(
+                httpClient,
+                options);
+
+        await sender.SendAsync(
+            CreateCrash(),
+            CancellationToken.None);
+
+        Assert.Equal(
+            3,
+            handler.RequestCount);
+    }
+
+    [Fact]
+    public async Task TelemetrySender_ThrowsOnUnauthorized()
+    {
+        var options =
+            CreateTestOptions();
+
+        var handler =
+            new StubHttpMessageHandler(
+                HttpStatusCode.Unauthorized);
+
+        using var httpClient =
+            new HttpClient(handler);
+
+        var sender =
+            new TelemetrySender(
+                httpClient,
+                options);
+
+        await Assert.ThrowsAsync<
+            InvalidOperationException>(
+            () =>
+                sender.SendAsync(
+                    CreateCrash(),
+                    CancellationToken.None));
+
+        Assert.Equal(
+            1,
+            handler.RequestCount);
+    }
+
+    [Fact]
+    public async Task TelemetrySender_ThrowsOnUnexpectedClientError()
+    {
+        var options =
+            CreateTestOptions();
+
+        var handler =
+            new StubHttpMessageHandler(
+                HttpStatusCode.BadRequest);
+
+        using var httpClient =
+            new HttpClient(handler);
+
+        var sender =
+            new TelemetrySender(
+                httpClient,
+                options);
+
+        await Assert.ThrowsAsync<
+            InvalidOperationException>(
+            () =>
+                sender.SendAsync(
+                    CreateCrash(),
+                    CancellationToken.None));
+
+        Assert.Equal(
+            1,
+            handler.RequestCount);
+    }
+
+    [Fact]
+    public async Task TelemetrySender_CompressesPayloadsLargerThanOneKilobyte()
+    {
+        var options =
+            CreateTestOptions();
+
+        var handler =
+            new InspectingHttpMessageHandler(
+                HttpStatusCode.OK);
+
+        using var httpClient =
+            new HttpClient(handler);
+
+        var sender =
+            new TelemetrySender(
+                httpClient,
+                options);
+
+        var largeMessage =
+            new string(
+                'X',
+                5000);
+
+        await sender.SendAsync(
+            CreateCrash(largeMessage),
+            CancellationToken.None);
+
+        Assert.NotNull(
+            handler.Request);
+
+        Assert.Equal(
+            "gzip",
+            handler.Request!
+                .Content!
+                .Headers
+                .ContentEncoding
+                .Single());
+
+        Assert.Equal(
+            "application/json",
+            handler.Request
+                .Content
+                .Headers
+                .ContentType!
+                .MediaType);
+
+        Assert.NotNull(
+            handler.RequestBody);
+
+        using var compressedStream =
+            new MemoryStream(
+                handler.RequestBody!);
+
+        using var gzipStream =
+            new GZipStream(
+                compressedStream,
+                CompressionMode.Decompress);
+
+        using var reader =
+            new StreamReader(
+                gzipStream,
+                Encoding.UTF8);
+
+        var decompressedJson =
+            await reader.ReadToEndAsync();
+
+        Assert.Contains(
+            largeMessage,
+            decompressedJson);
+    }
+
+    [Fact]
+    public void TraceXDataSanitizer_RedactsSensitiveValues()
+    {
+        var input =
+            "Authorization: Bearer secret-token " +
+            "Password=super-secret " +
+            "api_key=my-api-key " +
+            "token=another-secret";
+
+        var sanitized =
+            TraceXDataSanitizer.Sanitize(
+                input);
+
+        Assert.DoesNotContain(
+            "secret-token",
+            sanitized);
+
+        Assert.DoesNotContain(
+            "super-secret",
+            sanitized);
+
+        Assert.DoesNotContain(
+            "my-api-key",
+            sanitized);
+
+        Assert.DoesNotContain(
+            "another-secret",
+            sanitized);
+
+        Assert.Contains(
+            "[REDACTED]",
+            sanitized);
+    }
+
+    private static string CreateTempFilePath()
+    {
+        return Path.Combine(
+            Path.GetTempPath(),
+            $"tracex-test-{Guid.NewGuid():N}.json");
+    }
+
+    private static void DeleteFileIfExists(
+        string filePath)
+    {
+        if (File.Exists(filePath))
+        {
+            File.Delete(filePath);
+        }
+    }
+
     private sealed class StubHttpMessageHandler
         : HttpMessageHandler
     {
-        private readonly Queue<HttpStatusCode> _responses;
+        private readonly Queue<HttpStatusCode>
+            _responses;
 
-        public int RequestCount { get; private set; }
+        public int RequestCount
+        {
+            get;
+            private set;
+        }
 
         public StubHttpMessageHandler(
             params HttpStatusCode[] responses)
@@ -400,6 +704,92 @@ public class UnitTest1
             return Task.FromResult(
                 new HttpResponseMessage(
                     statusCode));
+        }
+    }
+
+    private sealed class SequenceHttpMessageHandler
+        : HttpMessageHandler
+    {
+        private readonly Queue<object>
+            _responses;
+
+        public int RequestCount
+        {
+            get;
+            private set;
+        }
+
+        public SequenceHttpMessageHandler(
+            params object[] responses)
+        {
+            _responses =
+                new Queue<object>(
+                    responses);
+        }
+
+        protected override Task<HttpResponseMessage>
+            SendAsync(
+                HttpRequestMessage request,
+                CancellationToken cancellationToken)
+        {
+            RequestCount++;
+
+            var response =
+                _responses.Count > 0
+                    ? _responses.Dequeue()
+                    : HttpStatusCode.OK;
+
+            if (response is Exception exception)
+            {
+                throw exception;
+            }
+
+            return Task.FromResult(
+                new HttpResponseMessage(
+                    (HttpStatusCode)response));
+        }
+    }
+
+    private sealed class InspectingHttpMessageHandler
+        : HttpMessageHandler
+    {
+        private readonly HttpStatusCode _statusCode;
+
+        public HttpRequestMessage? Request
+        {
+            get;
+            private set;
+        }
+
+        public byte[]? RequestBody
+        {
+            get;
+            private set;
+        }
+
+        public InspectingHttpMessageHandler(
+            HttpStatusCode statusCode)
+        {
+            _statusCode =
+                statusCode;
+        }
+
+        protected override async Task<
+            HttpResponseMessage> SendAsync(
+                HttpRequestMessage request,
+                CancellationToken cancellationToken)
+        {
+            Request =
+                request;
+
+            RequestBody =
+                request.Content is null
+                    ? null
+                    : await request.Content.ReadAsByteArrayAsync(
+                        cancellationToken);
+
+            return new HttpResponseMessage(
+                _statusCode);
         }
     }
 

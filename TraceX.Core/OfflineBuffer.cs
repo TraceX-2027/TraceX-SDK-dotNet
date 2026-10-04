@@ -7,14 +7,13 @@ public sealed class OfflineBuffer
     private const int MaxCapacity = 100;
 
     private readonly Queue<CrashEventRequest> _queue = new();
-
     private readonly object _lock = new();
-
     private readonly string _filePath;
 
     public OfflineBuffer(string? filePath = null)
     {
-        _filePath = filePath ?? GetDefaultFilePath();
+        _filePath =
+            filePath ?? GetDefaultFilePath();
 
         LoadFromDisk();
     }
@@ -30,7 +29,8 @@ public sealed class OfflineBuffer
         }
     }
 
-    public void Enqueue(CrashEventRequest crash)
+    public void Enqueue(
+        CrashEventRequest crash)
     {
         ArgumentNullException.ThrowIfNull(crash);
 
@@ -58,7 +58,8 @@ public sealed class OfflineBuffer
                 return false;
             }
 
-            crash = _queue.Dequeue();
+            crash =
+                _queue.Dequeue();
 
             SaveToDisk();
 
@@ -77,32 +78,39 @@ public sealed class OfflineBuffer
 
             try
             {
-                var json = File.ReadAllText(_filePath);
+                var json =
+                    File.ReadAllText(
+                        _filePath);
 
                 var crashes =
                     JsonSerializer.Deserialize<
-                        List<CrashEventRequest>>(json);
+                        List<CrashEventRequest>>(
+                        json);
 
                 if (crashes is null)
                 {
                     return;
                 }
 
-                foreach (var crash in crashes
-                    .TakeLast(MaxCapacity))
+                foreach (var crash in
+                    crashes.TakeLast(
+                        MaxCapacity))
                 {
-                    _queue.Enqueue(crash);
+                    _queue.Enqueue(
+                        crash);
                 }
             }
             catch (IOException)
             {
-                // Keep the in-memory buffer available
-                // if the local disk buffer cannot be read.
+                // Ignore disk read failures.
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Ignore access failures.
             }
             catch (JsonException)
             {
-                // Ignore corrupted local buffer data
-                // and keep the in-memory buffer available.
+                // Ignore corrupted buffer files.
             }
         }
     }
@@ -112,15 +120,19 @@ public sealed class OfflineBuffer
         try
         {
             var directory =
-                Path.GetDirectoryName(_filePath);
+                Path.GetDirectoryName(
+                    _filePath);
 
-            if (!string.IsNullOrWhiteSpace(directory))
+            if (!string.IsNullOrWhiteSpace(
+                    directory))
             {
-                Directory.CreateDirectory(directory);
+                Directory.CreateDirectory(
+                    directory);
             }
 
-            var json = JsonSerializer.Serialize(
-                _queue.ToList());
+            var json =
+                JsonSerializer.Serialize(
+                    _queue.ToList());
 
             File.WriteAllText(
                 _filePath,
@@ -128,8 +140,11 @@ public sealed class OfflineBuffer
         }
         catch (IOException)
         {
-            // Keep telemetry capture working even if
-            // the local disk buffer cannot be written.
+            // Ignore disk write failures.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Ignore access failures.
         }
     }
 

@@ -26,6 +26,8 @@ public sealed class TelemetrySender
         CrashEventRequest crash,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(crash);
+
         var endpoint =
             $"{_options.Endpoint.TrimEnd('/')}/crashes";
 
@@ -35,69 +37,112 @@ public sealed class TelemetrySender
         var jsonBytes =
             Encoding.UTF8.GetBytes(json);
 
-        for (var attempt = 0; attempt <= MaxRetries; attempt++)
+        for (var attempt = 0;
+             attempt <= MaxRetries;
+             attempt++)
         {
-            using var request =
-                CreateRequest(
-                    endpoint,
-                    jsonBytes);
-
-            using var response =
-                await _httpClient.SendAsync(
-                    request,
-                    cancellationToken);
-
-            if (response.IsSuccessStatusCode)
+            try
             {
-                return;
-            }
+                using var request =
+                    CreateRequest(
+                        endpoint,
+                        jsonBytes);
 
-            if (response.StatusCode ==
-                HttpStatusCode.Unauthorized)
-            {
-                return;
-            }
+                using var response =
+                    await _httpClient.SendAsync(
+                        request,
+                        cancellationToken);
 
-            if (response.StatusCode ==
-                HttpStatusCode.TooManyRequests)
-            {
-                if (attempt == MaxRetries)
+                if (response.IsSuccessStatusCode)
                 {
-                    throw new HttpRequestException(
-                        "TraceX API returned HTTP 429 after all retry attempts.",
-                        null,
-                        response.StatusCode);
+                    return;
                 }
 
-                await WaitForRetryAfterAsync(
-                    response,
-                    cancellationToken);
-
-                continue;
-            }
-
-            var statusCode =
-                (int)response.StatusCode;
-
-            if (statusCode >= 500 &&
-                statusCode <= 599)
-            {
-                if (attempt == MaxRetries)
+                if (response.StatusCode ==
+                    HttpStatusCode.Unauthorized)
                 {
-                    throw new HttpRequestException(
-                        $"TraceX API returned HTTP {statusCode} after all retry attempts.",
-                        null,
-                        response.StatusCode);
+                    throw new InvalidOperationException(
+                        "TraceX API returned HTTP 401 Unauthorized. " +
+                        "Telemetry dispatch has been stopped.");
                 }
 
+                if (response.StatusCode ==
+                    HttpStatusCode.TooManyRequests)
+                {
+                    if (attempt == MaxRetries)
+                    {
+                        throw new HttpRequestException(
+                            "TraceX API returned HTTP 429 after all retry attempts.",
+                            null,
+                            response.StatusCode);
+                    }
+
+                    await WaitForRetryAfterAsync(
+                        response,
+                        cancellationToken);
+
+                    continue;
+                }
+
+                var statusCode =
+                    (int)response.StatusCode;
+
+                if (statusCode >= 500 &&
+                    statusCode <= 599)
+                {
+                    if (attempt == MaxRetries)
+                    {
+                        throw new HttpRequestException(
+                            $"TraceX API returned HTTP {statusCode} after all retry attempts.",
+                            null,
+                            response.StatusCode);
+                    }
+
+                    await WaitWithBackoffAsync(
+                        attempt,
+                        cancellationToken);
+
+                    continue;
+                }
+
+                if (statusCode >= 400 &&
+                    statusCode <= 499)
+                {
+                    throw new InvalidOperationException(
+                        $"TraceX API returned unexpected HTTP {statusCode}. " +
+                        "Telemetry dispatch has been stopped.");
+                }
+
+                throw new InvalidOperationException(
+                    $"TraceX API returned unexpected HTTP status {statusCode}.");
+            }
+            catch (OperationCanceledException)
+                when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (HttpRequestException)
+                when (attempt < MaxRetries)
+            {
                 await WaitWithBackoffAsync(
                     attempt,
                     cancellationToken);
-
-                continue;
             }
-
-            return;
+            catch (TimeoutException)
+                when (attempt < MaxRetries)
+            {
+                await WaitWithBackoffAsync(
+                    attempt,
+                    cancellationToken);
+            }
+            catch (TaskCanceledException)
+                when (!cancellationToken.IsCancellationRequested &&
+                      attempt < MaxRetries)
+            {
+                await WaitWithBackoffAsync(
+                    attempt,
+                    cancellationToken);
+            }
         }
     }
 
@@ -118,12 +163,14 @@ public sealed class TelemetrySender
             CompressionThresholdBytes)
         {
             request.Content =
-                CreateGzipContent(jsonBytes);
+                CreateGzipContent(
+                    jsonBytes);
         }
         else
         {
             request.Content =
-                new ByteArrayContent(jsonBytes);
+                new ByteArrayContent(
+                    jsonBytes);
 
             request.Content.Headers.ContentType =
                 new System.Net.Http.Headers.MediaTypeHeaderValue(
@@ -179,7 +226,9 @@ public sealed class TelemetrySender
 
         var jitter =
             TimeSpan.FromMilliseconds(
-                Random.Shared.Next(0, 250));
+                Random.Shared.Next(
+                    0,
+                    250));
 
         await Task.Delay(
             exponentialDelay + jitter,

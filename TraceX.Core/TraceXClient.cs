@@ -16,7 +16,8 @@ public sealed class TraceXClient : IDisposable, IAsyncDisposable
 
     internal event Action<Exception>? ExceptionCaptured;
 
-    public TraceXClient(TraceXOptions options)
+    public TraceXClient(
+        TraceXOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
 
@@ -92,12 +93,14 @@ public sealed class TraceXClient : IDisposable, IAsyncDisposable
                     exception,
                     []);
 
-            _offlineBuffer.Enqueue(crash);
+            _offlineBuffer.Enqueue(
+                crash);
 
             return;
         }
 
-        CaptureException(exception);
+        CaptureException(
+            exception);
     }
 
     private void OnUnobservedTaskException(
@@ -120,8 +123,11 @@ public sealed class TraceXClient : IDisposable, IAsyncDisposable
         Exception exception,
         IReadOnlyList<CrashBreadcrumb> breadcrumbs)
     {
-        ArgumentNullException.ThrowIfNull(exception);
-        ArgumentNullException.ThrowIfNull(breadcrumbs);
+        ArgumentNullException.ThrowIfNull(
+            exception);
+
+        ArgumentNullException.ThrowIfNull(
+            breadcrumbs);
 
         ExceptionCaptured?.Invoke(
             exception);
@@ -220,17 +226,23 @@ public sealed class TraceXClient : IDisposable, IAsyncDisposable
 
         var crashBreadcrumbs =
             breadcrumbs
-                .Select(static breadcrumb =>
+                .Select((breadcrumb, index) =>
                     new CrashBreadcrumb
                     {
+                        SequenceOrder =
+                            index,
+
                         Timestamp =
                             breadcrumb.Timestamp,
 
-                        Type =
-                            breadcrumb.Type,
+                        Category =
+                            breadcrumb.Category,
 
-                        Message =
-                            breadcrumb.Message,
+                        Action =
+                            breadcrumb.Action,
+
+                        Target =
+                            breadcrumb.Target,
 
                         Data =
                             new Dictionary<string, string>(
@@ -264,6 +276,12 @@ public sealed class TraceXClient : IDisposable, IAsyncDisposable
             Environment =
                 new CrashEnvironment
                 {
+                    AppVersion =
+                        context.AppVersion,
+
+                    DeviceModel =
+                        context.DeviceModel,
+
                     RuntimeVersion =
                         context.RuntimeVersion,
 

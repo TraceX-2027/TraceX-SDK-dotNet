@@ -4,6 +4,12 @@ namespace TraceX.Core;
 
 public sealed class CrashEnvironment
 {
+    [JsonPropertyName("app_version")]
+    public string AppVersion { get; init; } = string.Empty;
+
+    [JsonPropertyName("device_model")]
+    public string DeviceModel { get; init; } = string.Empty;
+
     [JsonPropertyName("runtime_version")]
     public string RuntimeVersion { get; init; } = string.Empty;
 

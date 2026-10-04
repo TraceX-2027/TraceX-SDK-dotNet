@@ -1,9 +1,16 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.Reflection;
+using System.Runtime.InteropServices;
 
 namespace TraceX.Core;
 
 public sealed class TraceXTelemetryContext
 {
+    public string AppVersion { get; init; } =
+        GetAppVersion();
+
+    public string DeviceModel { get; init; } =
+        GetDeviceModel();
+
     public string RuntimeVersion { get; init; } =
         Environment.Version.ToString();
 
@@ -29,6 +36,12 @@ public sealed class TraceXTelemetryContext
 
         return new TraceXTelemetryContext
         {
+            AppVersion =
+                GetAppVersion(),
+
+            DeviceModel =
+                GetDeviceModel(),
+
             RuntimeVersion =
                 Environment.Version.ToString(),
 
@@ -47,5 +60,20 @@ public sealed class TraceXTelemetryContext
             EnvironmentName =
                 options.Environment
         };
+    }
+
+    private static string GetAppVersion()
+    {
+        return Assembly
+            .GetEntryAssembly()?
+            .GetName()
+            .Version?
+            .ToString()
+            ?? "unknown";
+    }
+
+    private static string GetDeviceModel()
+    {
+        return Environment.MachineName;
     }
 }
