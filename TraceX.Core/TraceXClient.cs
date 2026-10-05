@@ -13,6 +13,7 @@ public sealed class TraceXClient : IDisposable, IAsyncDisposable
     private readonly Channel<CrashEventRequest> _channel;
     private readonly HttpClient _httpClient;
     private readonly Task _dispatcherTask;
+    private readonly IDisposable _httpInstrumentationRegistration;
 
     internal event Action<Exception>? ExceptionCaptured;
 
@@ -22,6 +23,9 @@ public sealed class TraceXClient : IDisposable, IAsyncDisposable
         ArgumentNullException.ThrowIfNull(options);
 
         _options = options;
+
+        _httpInstrumentationRegistration =
+            TraceXHttpDependencyInstrumentation.EnsureStarted();
 
         _channel =
             Channel.CreateBounded<CrashEventRequest>(
@@ -99,8 +103,7 @@ public sealed class TraceXClient : IDisposable, IAsyncDisposable
             return;
         }
 
-        CaptureException(
-            exception);
+        CaptureException(exception);
     }
 
     private void OnUnobservedTaskException(
@@ -114,9 +117,17 @@ public sealed class TraceXClient : IDisposable, IAsyncDisposable
     public void CaptureException(
         Exception exception)
     {
+        var ambient =
+            TraceXBreadcrumbScope.Current?.GetAll();
+
+        var breadcrumbs =
+            ambient is not null
+                ? ToCrashBreadcrumbs(ambient)
+                : [];
+
         CaptureException(
             exception,
-            []);
+            breadcrumbs);
     }
 
     public void CaptureException(
@@ -191,6 +202,8 @@ public sealed class TraceXClient : IDisposable, IAsyncDisposable
         }
 
         _httpClient.Dispose();
+
+        _httpInstrumentationRegistration.Dispose();
     }
 
     public async ValueTask DisposeAsync()
@@ -227,27 +240,63 @@ public sealed class TraceXClient : IDisposable, IAsyncDisposable
         var crashBreadcrumbs =
             breadcrumbs
                 .Select((breadcrumb, index) =>
-                    new CrashBreadcrumb
+                {
+                    var category =
+                        breadcrumb.Category.StartsWith(
+                            "http.",
+                            StringComparison.OrdinalIgnoreCase)
+                            ? "network.http"
+                            : Clamp(
+                                breadcrumb.Category,
+                                50);
+
+                    var action =
+                        breadcrumb.Data.TryGetValue(
+                                "method",
+                                out var method) &&
+                            !string.IsNullOrEmpty(method)
+                            ? method
+                            : breadcrumb.Action;
+
+                    var target =
+                        breadcrumb.Data.TryGetValue(
+                                "route",
+                                out var route) &&
+                            !string.IsNullOrEmpty(route)
+                            ? route
+                            : breadcrumb.Data.TryGetValue(
+                                    "url",
+                                    out var url) &&
+                                !string.IsNullOrEmpty(url)
+                                ? url
+                                : breadcrumb.Target;
+
+                    return new CrashBreadcrumb
                     {
                         SequenceOrder =
-                            index,
+                            index + 1,
 
                         Timestamp =
                             breadcrumb.Timestamp,
 
                         Category =
-                            breadcrumb.Category,
+                            category,
 
                         Action =
-                            breadcrumb.Action,
+                            Clamp(
+                                action,
+                                100),
 
                         Target =
-                            breadcrumb.Target,
+                            Clamp(
+                                target,
+                                255),
 
                         Data =
                             new Dictionary<string, string>(
                                 breadcrumb.Data)
-                    })
+                    };
+                })
                 .ToList();
 
         return new CrashEventRequest
@@ -304,6 +353,86 @@ public sealed class TraceXClient : IDisposable, IAsyncDisposable
             Breadcrumbs =
                 crashBreadcrumbs
         };
+    }
+
+    private static IReadOnlyList<CrashBreadcrumb>
+        ToCrashBreadcrumbs(
+            IReadOnlyList<TraceXBreadcrumb> breadcrumbs)
+    {
+        return breadcrumbs
+            .Select((breadcrumb, index) =>
+            {
+                var category =
+                    breadcrumb.Type.StartsWith(
+                        "http.",
+                        StringComparison.OrdinalIgnoreCase)
+                        ? "network.http"
+                        : Clamp(
+                            breadcrumb.Type,
+                            50);
+
+                var action =
+                    breadcrumb.Data.TryGetValue(
+                            "method",
+                            out var method) &&
+                        !string.IsNullOrEmpty(method)
+                        ? method
+                        : breadcrumb.Message;
+
+                var target =
+                    breadcrumb.Data.TryGetValue(
+                            "route",
+                            out var route) &&
+                        !string.IsNullOrEmpty(route)
+                        ? route
+                        : breadcrumb.Data.TryGetValue(
+                                "url",
+                                out var url) &&
+                            !string.IsNullOrEmpty(url)
+                            ? url
+                            : string.Empty;
+
+                return new CrashBreadcrumb
+                {
+                    SequenceOrder =
+                        index + 1,
+
+                    Timestamp =
+                        breadcrumb.Timestamp,
+
+                    Category =
+                        category,
+
+                    Action =
+                        Clamp(
+                            action,
+                            100),
+
+                    Target =
+                        Clamp(
+                            target,
+                            255),
+
+                    Data =
+                        new Dictionary<string, string>(
+                            breadcrumb.Data)
+                };
+            })
+            .ToList();
+    }
+
+    private static string Clamp(
+        string? value,
+        int maxLength)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
+        return value.Length <= maxLength
+            ? value
+            : value[..maxLength];
     }
 
     private static string GetOfflineBufferPath(
