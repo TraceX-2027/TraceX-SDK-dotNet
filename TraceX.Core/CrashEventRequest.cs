@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
@@ -6,6 +6,9 @@ namespace TraceX.Core;
 
 public sealed class CrashEventRequest
 {
+    [JsonPropertyName("project_key")]
+    public string ProjectKey { get; init; } = string.Empty;
+
     [JsonPropertyName("occurred_at")]
     public DateTime OccurredAt { get; init; }
 

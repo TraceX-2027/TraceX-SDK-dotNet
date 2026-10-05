@@ -1,4 +1,4 @@
-﻿using System.IO.Compression;
+using System.IO.Compression;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -55,6 +55,10 @@ public sealed class TelemetrySender
 
                 if (response.IsSuccessStatusCode)
                 {
+                    if (_options.EnableLogging)
+                    {
+                        Console.WriteLine($"[TraceX] Successfully sent crash telemetry (Status: {response.StatusCode}).");
+                    }
                     return;
                 }
 
@@ -108,11 +112,15 @@ public sealed class TelemetrySender
                 if (statusCode >= 400 &&
                     statusCode <= 499)
                 {
+                    var body = await response.Content.ReadAsStringAsync(cancellationToken);
                     throw new InvalidOperationException(
-                        $"TraceX API returned unexpected HTTP {statusCode}. " +
-                        "Telemetry dispatch has been stopped.");
+                        $"TraceX API returned unexpected HTTP {statusCode}. Body: {body}");
                 }
 
+                if (_options.EnableLogging)
+                {
+                    Console.WriteLine($"[TraceX] API returned unexpected HTTP status {statusCode}.");
+                }
                 throw new InvalidOperationException(
                     $"TraceX API returned unexpected HTTP status {statusCode}.");
             }
@@ -163,7 +171,7 @@ public sealed class TelemetrySender
             "X-TraceX-Key",
             _options.ProjectKey);
 
-        if (jsonBytes.Length >
+        if (!_options.DisableGzip && jsonBytes.Length >
             CompressionThresholdBytes)
         {
             request.Content =

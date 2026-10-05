@@ -1,4 +1,4 @@
-﻿using System.Threading.Channels;
+using System.Threading.Channels;
 
 namespace TraceX.Core;
 
@@ -301,6 +301,9 @@ public sealed class TraceXClient : IDisposable, IAsyncDisposable
 
         return new CrashEventRequest
         {
+            ProjectKey =
+                _options.ProjectKey,
+
             OccurredAt =
                 DateTime.UtcNow,
 
