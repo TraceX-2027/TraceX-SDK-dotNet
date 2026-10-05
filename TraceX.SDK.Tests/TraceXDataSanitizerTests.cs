@@ -19,6 +19,20 @@ public sealed class TraceXDataSanitizerTests
     }
 
     [Fact]
+    public void Sanitize_RedactsStandaloneBearerToken()
+    {
+        var input =
+            "Bearer abc123-secret-token";
+
+        var result =
+            TraceXDataSanitizer.Sanitize(input);
+
+        Assert.Equal(
+            "Bearer [REDACTED]",
+            result);
+    }
+
+    [Fact]
     public void Sanitize_RedactsApiKey()
     {
         var input =

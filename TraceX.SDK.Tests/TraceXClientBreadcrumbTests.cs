@@ -26,7 +26,8 @@ public sealed class TraceXClientBreadcrumbTests
             {
                 new CrashBreadcrumb
                 {
-                    SequenceOrder = 0,
+                    SequenceOrder =
+                        1,
 
                     Timestamp =
                         DateTime.UtcNow,
@@ -86,15 +87,15 @@ public sealed class TraceXClientBreadcrumbTests
                 crash.Breadcrumbs);
 
         Assert.Equal(
-            0,
+            1,
             breadcrumb.SequenceOrder);
 
         Assert.Equal(
-            "http.request",
+            "network.http",
             breadcrumb.Category);
 
         Assert.Equal(
-            "GET /api/users/{id}",
+            "GET",
             breadcrumb.Action);
 
         Assert.Equal(
@@ -106,11 +107,150 @@ public sealed class TraceXClientBreadcrumbTests
             breadcrumb.Data["method"]);
 
         Assert.Equal(
+            "/api/users/{id}",
+            breadcrumb.Data["route"]);
+
+        Assert.Equal(
             "200",
             breadcrumb.Data["status_code"]);
 
         Assert.Equal(
             "25",
             breadcrumb.Data["duration_ms"]);
+    }
+
+    [Fact]
+    public void AmbientBreadcrumbs_AreMappedToCrashBreadcrumbs()
+    {
+        var options =
+            new TraceXOptions
+            {
+                ProjectKey =
+                    "pk_test",
+
+                Endpoint =
+                    "https://example.com/"
+            };
+
+        using var client =
+            new TraceXClient(options);
+
+        var buffer =
+            new BreadcrumbBuffer();
+
+        buffer.Add(
+            new TraceXBreadcrumb
+            {
+                Timestamp =
+                    DateTime.UtcNow,
+
+                Type =
+                    "http.request",
+
+                Message =
+                    "GET /api/orders",
+
+                Data =
+                    new Dictionary<string, string>
+                    {
+                        ["method"] =
+                            "GET",
+
+                        ["route"] =
+                            "/api/orders",
+
+                        ["status_code"] =
+                            "500",
+
+                        ["duration_ms"] =
+                            "12"
+                    }
+            });
+
+        TraceXBreadcrumbScope.Current =
+            buffer;
+
+        try
+        {
+            var ambient =
+                TraceXBreadcrumbScope.Current!
+                    .GetAll();
+
+            var method =
+                typeof(TraceXClient)
+                    .GetMethod(
+                        "CreateCrashEvent",
+                        BindingFlags.Instance |
+                        BindingFlags.NonPublic);
+
+            Assert.NotNull(method);
+
+            var crashBreadcrumbs =
+                ambient
+                    .Select(
+                        (breadcrumb, index) =>
+                            new CrashBreadcrumb
+                            {
+                                SequenceOrder =
+                                    index + 1,
+
+                                Timestamp =
+                                    breadcrumb.Timestamp,
+
+                                Category =
+                                    breadcrumb.Type,
+
+                                Action =
+                                    breadcrumb.Message,
+
+                                Target =
+                                    breadcrumb.Data.TryGetValue(
+                                        "route",
+                                        out var route)
+                                        ? route
+                                        : string.Empty,
+
+                                Data =
+                                    new Dictionary<string, string>(
+                                        breadcrumb.Data)
+                            })
+                    .ToList();
+
+            var crash =
+                Assert.IsType<CrashEventRequest>(
+                    method!.Invoke(
+                        client,
+                        new object[]
+                        {
+                            new InvalidOperationException(
+                                "ambient breadcrumb test"),
+                            crashBreadcrumbs
+                        }));
+
+            var breadcrumb =
+                Assert.Single(
+                    crash.Breadcrumbs);
+
+            Assert.Equal(
+                1,
+                breadcrumb.SequenceOrder);
+
+            Assert.Equal(
+                "network.http",
+                breadcrumb.Category);
+
+            Assert.Equal(
+                "GET",
+                breadcrumb.Action);
+
+            Assert.Equal(
+                "/api/orders",
+                breadcrumb.Target);
+        }
+        finally
+        {
+            TraceXBreadcrumbScope.Current =
+                null;
+        }
     }
 }

@@ -5,6 +5,8 @@ namespace TraceX.Core;
 
 public sealed class TraceXTelemetryContext
 {
+    private const int MaxEnvironmentFieldLength = 50;
+
     public string AppVersion { get; init; } =
         GetAppVersion();
 
@@ -15,7 +17,9 @@ public sealed class TraceXTelemetryContext
         Environment.Version.ToString();
 
     public string OsName { get; init; } =
-        RuntimeInformation.OSDescription;
+        Clamp(
+            RuntimeInformation.OSDescription,
+            MaxEnvironmentFieldLength);
 
     public string OsVersion { get; init; } =
         Environment.OSVersion.Version.ToString();
@@ -46,7 +50,9 @@ public sealed class TraceXTelemetryContext
                 Environment.Version.ToString(),
 
             OsName =
-                RuntimeInformation.OSDescription,
+                Clamp(
+                    RuntimeInformation.OSDescription,
+                    MaxEnvironmentFieldLength),
 
             OsVersion =
                 Environment.OSVersion.Version.ToString(),
@@ -58,7 +64,9 @@ public sealed class TraceXTelemetryContext
                 GC.GetTotalMemory(false),
 
             EnvironmentName =
-                options.Environment
+                Clamp(
+                    options.Environment,
+                    MaxEnvironmentFieldLength)
         };
     }
 
@@ -75,5 +83,19 @@ public sealed class TraceXTelemetryContext
     private static string GetDeviceModel()
     {
         return Environment.MachineName;
+    }
+
+    private static string Clamp(
+        string? value,
+        int maxLength)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
+        return value.Length <= maxLength
+            ? value
+            : value[..maxLength];
     }
 }

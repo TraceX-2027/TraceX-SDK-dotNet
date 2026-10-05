@@ -25,19 +25,84 @@ public static class TraceXHttpDependencyInstrumentation
         StartTimestampKey =
             new("TraceX.StartTimestamp");
 
-    private static int _started;
+    private static readonly object Sync =
+        new();
 
-    public static void EnsureStarted()
+    private static readonly List<IDisposable>
+        ListenerSubscriptions =
+            new();
+
+    private static IDisposable? _allListenersSubscription;
+    private static int _referenceCount;
+
+    public static IDisposable EnsureStarted()
     {
-        if (Interlocked.Exchange(
-                ref _started,
-                1) != 0)
+        lock (Sync)
         {
-            return;
+            _referenceCount++;
+
+            if (_referenceCount == 1)
+            {
+                _allListenersSubscription =
+                    DiagnosticListener.AllListeners.Subscribe(
+                        new ListenerObserver());
+            }
         }
 
-        DiagnosticListener.AllListeners.Subscribe(
-            new ListenerObserver());
+        return new Registration();
+    }
+
+    private static void Release()
+    {
+        List<IDisposable> subscriptions;
+
+        lock (Sync)
+        {
+            if (_referenceCount == 0)
+            {
+                return;
+            }
+
+            _referenceCount--;
+
+            if (_referenceCount != 0)
+            {
+                return;
+            }
+
+            _allListenersSubscription?.Dispose();
+
+            _allListenersSubscription =
+                null;
+
+            subscriptions =
+                ListenerSubscriptions.ToList();
+
+            ListenerSubscriptions.Clear();
+        }
+
+        foreach (var subscription in subscriptions)
+        {
+            subscription.Dispose();
+        }
+    }
+
+    private sealed class Registration
+        : IDisposable
+    {
+        private int _disposed;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(
+                    ref _disposed,
+                    1) != 0)
+            {
+                return;
+            }
+
+            Release();
+        }
     }
 
     private sealed class ListenerObserver
@@ -54,12 +119,29 @@ public static class TraceXHttpDependencyInstrumentation
                 return;
             }
 
-            listener.Subscribe(
-                new HttpEventObserver(),
-                static eventName =>
-                    eventName == RequestActivityName ||
-                    eventName == RequestStartEvent ||
-                    eventName == RequestStopEvent);
+            var subscription =
+                listener.Subscribe(
+                    new HttpEventObserver(),
+                    static eventName =>
+                        eventName ==
+                            RequestActivityName ||
+                        eventName ==
+                            RequestStartEvent ||
+                        eventName ==
+                            RequestStopEvent);
+
+            lock (Sync)
+            {
+                if (_referenceCount == 0)
+                {
+                    subscription.Dispose();
+                }
+                else
+                {
+                    ListenerSubscriptions.Add(
+                        subscription);
+                }
+            }
         }
 
         public void OnError(
@@ -168,9 +250,6 @@ public static class TraceXHttpDependencyInstrumentation
                 Stopwatch.GetElapsedTime(
                     startTimestamp);
 
-            var durationMilliseconds =
-                elapsed.TotalMilliseconds;
-
             var url =
                 GetSanitizedUrl(
                     request.RequestUri);
@@ -206,7 +285,7 @@ public static class TraceXHttpDependencyInstrumentation
                                 statusCode,
 
                             ["duration_ms"] =
-                                durationMilliseconds
+                                elapsed.TotalMilliseconds
                                     .ToString("F2")
                         }
                 });
@@ -218,6 +297,12 @@ public static class TraceXHttpDependencyInstrumentation
             if (uri is null)
             {
                 return string.Empty;
+            }
+
+            if (!uri.IsAbsoluteUri)
+            {
+                return TraceXDataSanitizer.Sanitize(
+                    uri.OriginalString);
             }
 
             var url =

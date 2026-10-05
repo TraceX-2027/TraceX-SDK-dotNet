@@ -4,38 +4,45 @@ namespace TraceX.Core;
 
 public static partial class TraceXDataSanitizer
 {
-    private const string RedactedValue = "[REDACTED]";
+    private const string RedactedValue =
+        "[REDACTED]";
 
-    public static string Sanitize(string? value)
+    public static string Sanitize(
+        string? value)
     {
         if (string.IsNullOrEmpty(value))
         {
             return string.Empty;
         }
 
-        var sanitized = value;
+        var sanitized =
+            value;
 
-        sanitized = BearerTokenRegex().Replace(
-            sanitized,
-            $"$1{RedactedValue}");
+        sanitized =
+            BearerTokenRegex().Replace(
+                sanitized,
+                $"$1{RedactedValue}");
 
-        sanitized = ConnectionStringSecretRegex().Replace(
-            sanitized,
-            $"$1{RedactedValue}");
+        sanitized =
+            ConnectionStringSecretRegex().Replace(
+                sanitized,
+                $"$1{RedactedValue}");
 
-        sanitized = ApiKeyRegex().Replace(
-            sanitized,
-            $"$1{RedactedValue}");
+        sanitized =
+            ApiKeyRegex().Replace(
+                sanitized,
+                $"$1{RedactedValue}");
 
-        sanitized = SensitiveFieldRegex().Replace(
-            sanitized,
-            $"$1$2{RedactedValue}");
+        sanitized =
+            SensitiveFieldRegex().Replace(
+                sanitized,
+                $"$1$2{RedactedValue}");
 
         return sanitized;
     }
 
     [GeneratedRegex(
-        @"(?i)(Authorization\s*:\s*Bearer\s+)[^\s,;]+",
+        @"(?i)((?:Authorization\s*:\s*)?Bearer\s+)[^\s,;]+",
         RegexOptions.CultureInvariant)]
     private static partial Regex BearerTokenRegex();
 

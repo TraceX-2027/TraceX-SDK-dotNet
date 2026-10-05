@@ -10,11 +10,14 @@ public sealed class TraceXHttpDependencyInstrumentationTests
     [Fact]
     public async Task HttpClientRequest_CapturesDependencyBreadcrumb()
     {
-        TraceXHttpDependencyInstrumentation.EnsureStarted();
+        using var instrumentation =
+            TraceXHttpDependencyInstrumentation.EnsureStarted();
 
-        var buffer = new BreadcrumbBuffer();
+        var buffer =
+            new BreadcrumbBuffer();
 
-        TraceXBreadcrumbScope.Current = buffer;
+        TraceXBreadcrumbScope.Current =
+            buffer;
 
         try
         {
@@ -80,18 +83,22 @@ public sealed class TraceXHttpDependencyInstrumentationTests
         }
         finally
         {
-            TraceXBreadcrumbScope.Current = null;
+            TraceXBreadcrumbScope.Current =
+                null;
         }
     }
 
     [Fact]
     public async Task HttpClientRequest_SanitizesSensitiveQueryParameters()
     {
-        TraceXHttpDependencyInstrumentation.EnsureStarted();
+        using var instrumentation =
+            TraceXHttpDependencyInstrumentation.EnsureStarted();
 
-        var buffer = new BreadcrumbBuffer();
+        var buffer =
+            new BreadcrumbBuffer();
 
-        TraceXBreadcrumbScope.Current = buffer;
+        TraceXBreadcrumbScope.Current =
+            buffer;
 
         try
         {
@@ -146,7 +153,149 @@ public sealed class TraceXHttpDependencyInstrumentationTests
         }
         finally
         {
-            TraceXBreadcrumbScope.Current = null;
+            TraceXBreadcrumbScope.Current =
+                null;
+        }
+    }
+
+    [Fact]
+    public async Task HttpDependency_IgnoresInternalTraceXRequests()
+    {
+        using var instrumentation =
+            TraceXHttpDependencyInstrumentation.EnsureStarted();
+
+        var buffer =
+            new BreadcrumbBuffer();
+
+        TraceXBreadcrumbScope.Current =
+            buffer;
+
+        try
+        {
+            using var server =
+                new TcpListener(
+                    IPAddress.Loopback,
+                    0);
+
+            server.Start();
+
+            var endpoint =
+                (IPEndPoint)server.LocalEndpoint;
+
+            var serverTask =
+                AcceptHttpRequestAsync(server);
+
+            using var httpClient =
+                new HttpClient();
+
+            using var request =
+                new HttpRequestMessage(
+                    HttpMethod.Post,
+                    $"http://127.0.0.1:{endpoint.Port}/crashes");
+
+            request.Options.Set(
+                TraceXHttpDependencyInstrumentation.InternalRequestKey,
+                true);
+
+            using var response =
+                await httpClient.SendAsync(
+                    request);
+
+            Assert.Equal(
+                HttpStatusCode.OK,
+                response.StatusCode);
+
+            await serverTask;
+
+            Assert.DoesNotContain(
+                buffer.GetAll(),
+                breadcrumb =>
+                    breadcrumb.Type ==
+                    "http.dependency");
+        }
+        finally
+        {
+            TraceXBreadcrumbScope.Current =
+                null;
+        }
+    }
+
+    [Fact]
+    public async Task HttpClientRequest_SupportsRelativeUri()
+    {
+        using var instrumentation =
+            TraceXHttpDependencyInstrumentation.EnsureStarted();
+
+        var buffer =
+            new BreadcrumbBuffer();
+
+        TraceXBreadcrumbScope.Current =
+            buffer;
+
+        try
+        {
+            using var handler =
+                new HttpClientHandler();
+
+            using var httpClient =
+                new HttpClient(handler)
+                {
+                    BaseAddress =
+                        new Uri(
+                            "http://127.0.0.1/")
+                };
+
+            using var request =
+                new HttpRequestMessage(
+                    HttpMethod.Get,
+                    "api/test");
+
+            // The actual HTTP instrumentation receives the
+            // resolved absolute URI from HttpClient.
+            // This test ensures normal dependency capture
+            // remains functional with BaseAddress usage.
+            request.RequestUri =
+                new Uri(
+                    "api/test",
+                    UriKind.Relative);
+
+            using var server =
+                new TcpListener(
+                    IPAddress.Loopback,
+                    0);
+
+            server.Start();
+
+            var endpoint =
+                (IPEndPoint)server.LocalEndpoint;
+
+            httpClient.BaseAddress =
+                new Uri(
+                    $"http://127.0.0.1:{endpoint.Port}/");
+
+            var serverTask =
+                AcceptHttpRequestAsync(server);
+
+            using var response =
+                await httpClient.SendAsync(
+                    request);
+
+            Assert.Equal(
+                HttpStatusCode.OK,
+                response.StatusCode);
+
+            await serverTask;
+
+            Assert.Contains(
+                buffer.GetAll(),
+                breadcrumb =>
+                    breadcrumb.Type ==
+                    "http.dependency");
+        }
+        finally
+        {
+            TraceXBreadcrumbScope.Current =
+                null;
         }
     }
 
@@ -176,7 +325,8 @@ public sealed class TraceXHttpDependencyInstrumentationTests
             "OK";
 
         var responseBytes =
-            Encoding.ASCII.GetBytes(response);
+            Encoding.ASCII.GetBytes(
+                response);
 
         await stream.WriteAsync(
             responseBytes);

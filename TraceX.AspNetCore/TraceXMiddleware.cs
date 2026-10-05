@@ -75,7 +75,8 @@ public class TraceXMiddleware
         }
         finally
         {
-            TraceXBreadcrumbScope.Current = null;
+            TraceXBreadcrumbScope.Current =
+                null;
         }
     }
 
@@ -136,33 +137,64 @@ public class TraceXMiddleware
             IReadOnlyList<TraceXBreadcrumb> breadcrumbs)
     {
         return breadcrumbs
-            .Select(
-                (breadcrumb, index) =>
-                    new CrashBreadcrumb
-                    {
-                        SequenceOrder =
-                            index,
-
-                        Timestamp =
-                            breadcrumb.Timestamp,
-
-                        Category =
+            .Select((breadcrumb, index) =>
+            {
+                var category =
+                    breadcrumb.Type.StartsWith(
+                        "http.",
+                        StringComparison.OrdinalIgnoreCase)
+                        ? "network.http"
+                        : Clamp(
                             breadcrumb.Type,
+                            50);
 
-                        Action =
-                            breadcrumb.Message,
+                var action =
+                    breadcrumb.Data.TryGetValue(
+                            "method",
+                            out var method) &&
+                        !string.IsNullOrEmpty(method)
+                        ? method
+                        : breadcrumb.Message;
 
-                        Target =
-                            breadcrumb.Data.TryGetValue(
-                                "route",
-                                out var route)
-                                ? route
-                                : string.Empty,
+                var target =
+                    breadcrumb.Data.TryGetValue(
+                            "route",
+                            out var route) &&
+                        !string.IsNullOrEmpty(route)
+                        ? route
+                        : breadcrumb.Data.TryGetValue(
+                                "url",
+                                out var url) &&
+                            !string.IsNullOrEmpty(url)
+                            ? url
+                            : string.Empty;
 
-                        Data =
-                            new Dictionary<string, string>(
-                                breadcrumb.Data)
-                    })
+                return new CrashBreadcrumb
+                {
+                    SequenceOrder =
+                        index + 1,
+
+                    Timestamp =
+                        breadcrumb.Timestamp,
+
+                    Category =
+                        category,
+
+                    Action =
+                        Clamp(
+                            action,
+                            100),
+
+                    Target =
+                        Clamp(
+                            target,
+                            255),
+
+                    Data =
+                        new Dictionary<string, string>(
+                            breadcrumb.Data)
+                };
+            })
             .ToList();
     }
 
@@ -170,10 +202,25 @@ public class TraceXMiddleware
         HttpContext context)
     {
         var routeEndpoint =
-            context.GetEndpoint() as RouteEndpoint;
+            context.GetEndpoint()
+                as RouteEndpoint;
 
         return routeEndpoint?.RoutePattern.RawText
             ?? context.Request.Path.Value
             ?? "/";
+    }
+
+    private static string Clamp(
+        string? value,
+        int maxLength)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
+        return value.Length <= maxLength
+            ? value
+            : value[..maxLength];
     }
 }
