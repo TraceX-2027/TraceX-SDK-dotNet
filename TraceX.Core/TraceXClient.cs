@@ -92,10 +92,18 @@ public sealed class TraceXClient : IDisposable, IAsyncDisposable
 
         if (e.IsTerminating)
         {
+            var ambient =
+                TraceXBreadcrumbScope.Current?.GetAll();
+
+            var breadcrumbs =
+                ambient is not null
+                    ? ToCrashBreadcrumbs(ambient)
+                    : [];
+
             var crash =
                 CreateCrashEvent(
                     exception,
-                    []);
+                    breadcrumbs);
 
             _offlineBuffer.Enqueue(
                 crash);

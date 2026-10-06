@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using TraceX.Core;
@@ -76,6 +76,8 @@ public sealed class TraceXHttpDependencyInstrumentationTests
             Assert.True(
                 double.TryParse(
                     breadcrumb.Data["duration_ms"],
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture,
                     out var duration));
 
             Assert.True(

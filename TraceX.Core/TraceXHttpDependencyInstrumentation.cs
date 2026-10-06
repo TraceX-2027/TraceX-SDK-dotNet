@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Net.Http;
 
 namespace TraceX.Core;
@@ -286,7 +286,7 @@ public static class TraceXHttpDependencyInstrumentation
 
                             ["duration_ms"] =
                                 elapsed.TotalMilliseconds
-                                    .ToString("F2")
+                                    .ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
                         }
                 });
         }

@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 using TraceX.Core;
 
 namespace TraceX.SDK.Tests;
@@ -65,5 +65,20 @@ public sealed class TraceXTelemetryContextTests
         Assert.Equal(
             "Staging",
             context.EnvironmentName);
+    }
+
+    [Fact]
+    public void Create_ClampsLongEnvironmentNames()
+    {
+        var options = new TraceXOptions
+        {
+            ProjectKey = "pk_test",
+            Environment = new string('A', 100)
+        };
+
+        var context =
+            TraceXTelemetryContext.Create(options);
+
+        Assert.Equal(50, context.EnvironmentName.Length);
     }
 }
