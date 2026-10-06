@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace TraceX.Samples.Api.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api")]
 public class CrashSimulationController : ControllerBase
 {
     private readonly HttpClient _httpClient;
@@ -36,12 +36,13 @@ public class CrashSimulationController : ControllerBase
     [HttpGet("background-worker")]
     public IActionResult TriggerBackgroundCrash()
     {
-        Task.Run(async () =>
+        var thread = new Thread(() =>
         {
-            await Task.Delay(100);
-            throw new ArgumentOutOfRangeException("This unobserved exception should be caught by the AppDomain/TaskScheduler hook.");
+            Thread.Sleep(100);
+            throw new ArgumentOutOfRangeException("This unobserved exception should be caught by the AppDomain hook deterministically.");
         });
+        thread.Start();
 
-        return Accepted(new { message = "Background task started. It will crash shortly." });
+        return Accepted(new { message = "Background thread started. It will crash shortly." });
     }
 }

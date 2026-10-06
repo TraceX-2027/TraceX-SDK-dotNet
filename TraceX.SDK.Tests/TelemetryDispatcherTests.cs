@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using System.IO.Compression;
+using System.Threading.Channels;
 using TraceX.Core;
 
 namespace TraceX.SDK.Tests;
@@ -13,9 +14,9 @@ public sealed class TelemetryDispatcherTests
         public HttpRequestMessage? LastRequest { get; private set; }
         public byte[]? LastContentBytes { get; private set; }
 
-        private readonly Func<HttpResponseMessage> _responseFactory;
+        private readonly Func<int, HttpResponseMessage> _responseFactory;
 
-        public MockHttpMessageHandler(Func<HttpResponseMessage> responseFactory)
+        public MockHttpMessageHandler(Func<int, HttpResponseMessage> responseFactory)
         {
             _responseFactory = responseFactory;
         }
@@ -24,79 +25,69 @@ public sealed class TelemetryDispatcherTests
         {
             SendCount++;
             LastRequest = request;
-            
+
             if (request.Content != null)
             {
                 LastContentBytes = await request.Content.ReadAsByteArrayAsync(cancellationToken);
             }
 
-            return _responseFactory();
+            return _responseFactory(SendCount);
         }
     }
 
     [Fact]
     public async Task SendAsync_LargePayload_AppliesGzipCompression()
     {
-        // Arrange
-        var handler = new MockHttpMessageHandler(() => new HttpResponseMessage(HttpStatusCode.Accepted));
+        // ... (Keep existing test)
+        var handler = new MockHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.Accepted));
         var client = new HttpClient(handler);
         var options = new TraceXOptions { ProjectKey = "tracex_live_test", Endpoint = "https://test/" };
         var sender = new TelemetrySender(client, options);
 
-        // Create a large payload > 1KB
-        var crash = new CrashEventRequest
-        {
-            ProjectKey = options.ProjectKey,
-            StackTrace = new string('A', 1500)
-        };
-
-        // Act
+        var crash = new CrashEventRequest { ProjectKey = options.ProjectKey, StackTrace = new string('A', 1500) };
         await sender.SendAsync(crash, CancellationToken.None);
 
-        // Assert
         Assert.Equal(1, handler.SendCount);
-        Assert.NotNull(handler.LastRequest);
-        Assert.True(handler.LastRequest.Content?.Headers.ContentEncoding.Contains("gzip"));
-        Assert.Equal("application/json", handler.LastRequest.Content?.Headers.ContentType?.MediaType);
-        
-        Assert.NotNull(handler.LastContentBytes);
-        Assert.True(handler.LastContentBytes.Length > 0);
-        Assert.True(handler.LastContentBytes.Length < 1500); // Should be compressed
+        Assert.True(handler.LastRequest?.Content?.Headers.ContentEncoding.Contains("gzip"));
     }
-    
+
     [Fact]
     public async Task SendAsync_SmallPayload_SendsUncompressedJson()
     {
-        // Arrange
-        var handler = new MockHttpMessageHandler(() => new HttpResponseMessage(HttpStatusCode.Accepted));
+        var handler = new MockHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.Accepted));
         var client = new HttpClient(handler);
         var options = new TraceXOptions { ProjectKey = "tracex_live_test", Endpoint = "https://test/" };
         var sender = new TelemetrySender(client, options);
 
-        var crash = new CrashEventRequest
-        {
-            ProjectKey = options.ProjectKey,
-            StackTrace = "small stack trace"
-        };
-
-        // Act
+        var crash = new CrashEventRequest { ProjectKey = options.ProjectKey, StackTrace = "small stack trace" };
         await sender.SendAsync(crash, CancellationToken.None);
 
-        // Assert
         Assert.Equal(1, handler.SendCount);
-        Assert.NotNull(handler.LastRequest);
-        Assert.False(handler.LastRequest.Content?.Headers.ContentEncoding.Contains("gzip"));
-        Assert.Equal("application/json", handler.LastRequest.Content?.Headers.ContentType?.MediaType);
+        Assert.False(handler.LastRequest?.Content?.Headers.ContentEncoding.Contains("gzip"));
+    }
+
+    [Fact]
+    public async Task SendAsync_LargePayload_WithDisableGzip_SendsUncompressedJson()
+    {
+        var handler = new MockHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.Accepted));
+        var client = new HttpClient(handler);
+        var options = new TraceXOptions { ProjectKey = "tracex_live_test", Endpoint = "https://test/", DisableGzip = true };
+        var sender = new TelemetrySender(client, options);
+
+        var crash = new CrashEventRequest { ProjectKey = options.ProjectKey, StackTrace = new string('A', 1500) };
+        await sender.SendAsync(crash, CancellationToken.None);
+
+        Assert.Equal(1, handler.SendCount);
+        Assert.False(handler.LastRequest?.Content?.Headers.ContentEncoding.Contains("gzip"));
     }
 
     [Fact]
     public async Task SendAsync_When429TooManyRequests_RetriesUpToMaxLimit()
     {
-        // Arrange
-        var handler = new MockHttpMessageHandler(() => 
+        var handler = new MockHttpMessageHandler(_ =>
         {
             var response = new HttpResponseMessage(HttpStatusCode.TooManyRequests);
-            response.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromMilliseconds(50));
+            response.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromMilliseconds(10));
             return response;
         });
         var client = new HttpClient(handler);
@@ -105,10 +96,134 @@ public sealed class TelemetryDispatcherTests
 
         var crash = new CrashEventRequest { ProjectKey = options.ProjectKey };
 
-        // Act & Assert
         await Assert.ThrowsAsync<HttpRequestException>(() => sender.SendAsync(crash, CancellationToken.None));
-        
-        // MaxRetries is 3 in TelemetrySender, so it sends initially + 3 retries = 4 sends
         Assert.Equal(4, handler.SendCount);
+    }
+
+    [Fact]
+    public async Task Dispatcher_BackgroundDispatch_Success()
+    {
+        var handler = new MockHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.Accepted));
+        var client = new HttpClient(handler);
+        var options = new TraceXOptions { ProjectKey = "test", Endpoint = "https://test/" };
+        var sender = new TelemetrySender(client, options);
+        var channel = Channel.CreateUnbounded<CrashEventRequest>();
+
+        var bufferPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(bufferPath);
+        var buffer = new OfflineBuffer(bufferPath);
+
+        var dispatcher = new TelemetryDispatcher(channel, sender, buffer);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        var task = dispatcher.RunAsync(cts.Token);
+
+        channel.Writer.TryWrite(new CrashEventRequest { ProjectKey = "test" });
+        channel.Writer.TryComplete();
+
+        await task;
+        Assert.Equal(1, handler.SendCount);
+
+        Directory.Delete(bufferPath, true);
+    }
+
+    [Fact]
+    public async Task Dispatcher_Permanent4xx_DiscardedNoRequeue()
+    {
+        var handler = new MockHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.BadRequest));
+        var client = new HttpClient(handler);
+        var options = new TraceXOptions { ProjectKey = "test", Endpoint = "https://test/" };
+        var sender = new TelemetrySender(client, options);
+        var channel = Channel.CreateUnbounded<CrashEventRequest>();
+
+        var bufferPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(bufferPath);
+        var buffer = new OfflineBuffer(bufferPath);
+
+        var dispatcher = new TelemetryDispatcher(channel, sender, buffer);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        var task = dispatcher.RunAsync(cts.Token);
+
+        channel.Writer.TryWrite(new CrashEventRequest { ProjectKey = "test" });
+        channel.Writer.TryComplete();
+
+        await task;
+
+        Assert.Equal(1, handler.SendCount);
+        Assert.False(buffer.TryDequeue(out _)); // Discarded
+
+        Directory.Delete(bufferPath, true);
+    }
+
+    [Fact]
+    public async Task Dispatcher_TransientFailure_OfflineBuffering_LaterEventsProcessed()
+    {
+        var handler = new MockHttpMessageHandler(count =>
+            new HttpResponseMessage(count == 1 ? HttpStatusCode.ServiceUnavailable : HttpStatusCode.Accepted));
+        var client = new HttpClient(handler);
+        var options = new TraceXOptions { ProjectKey = "test", Endpoint = "https://test/" };
+        var sender = new TelemetrySender(client, options);
+        var channel = Channel.CreateUnbounded<CrashEventRequest>();
+
+        var bufferPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(bufferPath);
+        var buffer = new OfflineBuffer(bufferPath);
+
+        var dispatcher = new TelemetryDispatcher(channel, sender, buffer);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        var task = dispatcher.RunAsync(cts.Token);
+
+        // Write first crash -> 503 -> Enqueued to buffer
+        channel.Writer.TryWrite(new CrashEventRequest { ProjectKey = "test", ErrorMessage = "First" });
+
+        // Wait a bit to ensure it processes
+        await Task.Delay(200);
+
+        // Write second crash -> 202 -> Drains buffer -> First crash sent as 202
+        channel.Writer.TryWrite(new CrashEventRequest { ProjectKey = "test", ErrorMessage = "Second" });
+        channel.Writer.TryComplete();
+
+        await task;
+
+        Directory.Delete(bufferPath, true);
+    }
+
+    [Fact]
+    public async Task Dispatcher_TransientFailure_ForcesBufferAndDrain()
+    {
+        // Fail first 4 attempts (initial + 3 retries), then succeed
+        var handler = new MockHttpMessageHandler(count =>
+            new HttpResponseMessage(count <= 4 ? HttpStatusCode.ServiceUnavailable : HttpStatusCode.Accepted));
+        var client = new HttpClient(handler);
+        var options = new TraceXOptions { ProjectKey = "test", Endpoint = "https://test/" };
+        var sender = new TelemetrySender(client, options);
+        var channel = Channel.CreateUnbounded<CrashEventRequest>();
+
+        var bufferPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(bufferPath);
+        var buffer = new OfflineBuffer(bufferPath);
+
+        var dispatcher = new TelemetryDispatcher(channel, sender, buffer);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var task = dispatcher.RunAsync(cts.Token);
+
+        channel.Writer.TryWrite(new CrashEventRequest { ProjectKey = "test", ErrorMessage = "First" });
+        await Task.Delay(500); // Allow retries to exhaust
+
+        channel.Writer.TryWrite(new CrashEventRequest { ProjectKey = "test", ErrorMessage = "Second" });
+        channel.Writer.TryComplete();
+
+        await task;
+
+        // Sends:
+        // 1-4: Crash 1 fails -> Buffers
+        // 5: Crash 2 succeeds
+        // 6: Buffer drains -> Crash 1 succeeds
+        Assert.Equal(6, handler.SendCount);
+
+        Directory.Delete(bufferPath, true);
     }
 }

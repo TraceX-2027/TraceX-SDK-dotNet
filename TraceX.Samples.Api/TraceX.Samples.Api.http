@@ -1,6 +1,15 @@
 @TraceX.Samples.Api_HostAddress = http://localhost:5238
 
-GET {{TraceX.Samples.Api_HostAddress}}/weatherforecast/
+### Trigger Null Reference Exception
+GET {{TraceX.Samples.Api_HostAddress}}/api/null-reference
+Accept: application/json
+
+### Trigger HTTP Dependency Exception
+GET {{TraceX.Samples.Api_HostAddress}}/api/http-dependency
+Accept: application/json
+
+### Trigger Background Worker Exception
+GET {{TraceX.Samples.Api_HostAddress}}/api/background-worker
 Accept: application/json
 
 ###

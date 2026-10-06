@@ -14,9 +14,11 @@ public sealed class TraceXMiddlewareExceptionTests
     {
         // Arrange
         var options = new TraceXOptions { ProjectKey = "pk_test", Endpoint = "https://example.com/" };
-        var client = new TraceXClient(options);
+        await using var client = new TraceXClient(options);
         
-        // Let's test it by observing the exception is re-thrown and the BreadcrumbBuffer has the 500 internal server error breadcrumb.
+        Exception? capturedException = null;
+        client.ExceptionCaptured += ex => capturedException = ex;
+
         var expectedException = new InvalidOperationException("Test exception");
         var middleware = new TraceXMiddleware(
             context => throw expectedException,
@@ -27,19 +29,19 @@ public sealed class TraceXMiddlewareExceptionTests
         context.Request.Path = "/api/crash";
 
         // Act
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => middleware.InvokeAsync(context));
+        var thrownException = await Assert.ThrowsAsync<InvalidOperationException>(() => middleware.InvokeAsync(context));
 
         // Assert
-        Assert.Same(expectedException, exception);
+        Assert.Same(expectedException, thrownException);
+        Assert.Same(expectedException, capturedException);
         
         var buffer = context.Items[TraceXMiddleware.BreadcrumbBufferItemKey] as BreadcrumbBuffer;
         Assert.NotNull(buffer);
         
         var breadcrumbs = buffer.GetAll();
         Assert.Single(breadcrumbs);
-        Assert.Equal("500", breadcrumbs[0].Data["status_code"]);
+        Assert.Equal("500", breadcrumbs[0].Data["status_code"]?.ToString());
         
-        // Check that ExceptionCapturedItemKey is set
         Assert.True(context.Items.ContainsKey(TraceXMiddleware.ExceptionCapturedItemKey));
         Assert.True((bool)context.Items[TraceXMiddleware.ExceptionCapturedItemKey]!);
     }

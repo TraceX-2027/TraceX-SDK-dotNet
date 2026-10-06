@@ -18,7 +18,9 @@ public sealed class TraceXTelemetryContext
             100);
 
     public string RuntimeVersion { get; init; } =
-        Environment.Version.ToString();
+        Clamp(
+            Environment.Version.ToString(),
+            100);
 
     public string OsName { get; init; } =
         Clamp(
@@ -57,7 +59,9 @@ public sealed class TraceXTelemetryContext
                     100),
 
             RuntimeVersion =
-                Environment.Version.ToString(),
+                Clamp(
+                    Environment.Version.ToString(),
+                    100),
 
             OsName =
                 Clamp(
