@@ -16,6 +16,7 @@ public sealed class TraceXClient : IDisposable, IAsyncDisposable
     private readonly IDisposable _httpInstrumentationRegistration;
 
     internal event Action<Exception>? ExceptionCaptured;
+    internal event Action<CrashEventRequest>? RequestEnqueued;
 
     public TraceXClient(
         TraceXOptions options)
@@ -155,6 +156,8 @@ public sealed class TraceXClient : IDisposable, IAsyncDisposable
             CreateCrashEvent(
                 exception,
                 breadcrumbs);
+
+        RequestEnqueued?.Invoke(crash);
 
         if (!_channel.Writer.TryWrite(
                 crash))
@@ -322,8 +325,9 @@ public sealed class TraceXClient : IDisposable, IAsyncDisposable
                 "csharp",
 
             ExceptionType =
-                exception.GetType().FullName
-                ?? exception.GetType().Name,
+                Clamp(
+                    exception.GetType().FullName ?? exception.GetType().Name,
+                    150) ?? "Unknown",
 
             ErrorMessage =
                 TraceXDataSanitizer.Sanitize(

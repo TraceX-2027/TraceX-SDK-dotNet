@@ -35,7 +35,7 @@ builder.Services.AddTraceX(options =>
     options.ProjectKey = builder.Configuration["TraceX:ProjectKey"];
     
     // Optional configuration
-    options.Endpoint = builder.Configuration["TraceX:Endpoint"] ?? "https://api.tracex.dev/api/v1/";
+    options.Endpoint = builder.Configuration["TraceX:Endpoint"] ?? "https://tracex-api.kareemadel.com/api/v1/";
     options.Environment = builder.Environment.EnvironmentName;
     options.EnableLogging = true;
     options.DisableGzip = false; // Set to true if backend does not support gzip decompression
@@ -58,7 +58,7 @@ Add this section to your `appsettings.json`:
 {
   "TraceX": {
     "ProjectKey": "tracex_live_pub_98a72bc4",
-    "Endpoint": "https://api.tracex.dev/api/v1/"
+    "Endpoint": "https://tracex-api.kareemadel.com/api/v1/"
   }
 }
 ```
