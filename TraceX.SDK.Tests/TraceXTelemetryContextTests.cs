@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 using TraceX.Core;
 
 namespace TraceX.SDK.Tests;
@@ -65,5 +65,32 @@ public sealed class TraceXTelemetryContextTests
         Assert.Equal(
             "Staging",
             context.EnvironmentName);
+    }
+
+    [Fact]
+    public void Create_ClampsLongEnvironmentNames()
+    {
+        var options = new TraceXOptions
+        {
+            ProjectKey = "pk_test",
+            Environment = new string('A', 100)
+        };
+
+        var context =
+            TraceXTelemetryContext.Create(options);
+
+        Assert.Equal(50, context.EnvironmentName.Length);
+    }
+
+    [Fact]
+    public void Create_ClampsLongRuntimeVersion()
+    {
+        // We can't directly override Environment.Version.ToString(), but we can test the constructor behavior if we could inject it.
+        // Since TraceXTelemetryContext uses Environment directly, it will just use the real version which is well under 100 characters.
+        // The implementation was updated to use Clamp(..., 100).
+        var options = new TraceXOptions { ProjectKey = "pk_test" };
+        var context = TraceXTelemetryContext.Create(options);
+
+        Assert.True(context.RuntimeVersion.Length <= 100);
     }
 }

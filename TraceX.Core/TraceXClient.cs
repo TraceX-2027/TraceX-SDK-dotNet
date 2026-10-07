@@ -1,4 +1,4 @@
-﻿using System.Threading.Channels;
+using System.Threading.Channels;
 
 namespace TraceX.Core;
 
@@ -16,6 +16,7 @@ public sealed class TraceXClient : IDisposable, IAsyncDisposable
     private readonly IDisposable _httpInstrumentationRegistration;
 
     internal event Action<Exception>? ExceptionCaptured;
+    internal event Action<CrashEventRequest>? RequestEnqueued;
 
     public TraceXClient(
         TraceXOptions options)
@@ -92,10 +93,18 @@ public sealed class TraceXClient : IDisposable, IAsyncDisposable
 
         if (e.IsTerminating)
         {
+            var ambient =
+                TraceXBreadcrumbScope.Current?.GetAll();
+
+            var breadcrumbs =
+                ambient is not null
+                    ? ToCrashBreadcrumbs(ambient)
+                    : [];
+
             var crash =
                 CreateCrashEvent(
                     exception,
-                    []);
+                    breadcrumbs);
 
             _offlineBuffer.Enqueue(
                 crash);
@@ -147,6 +156,8 @@ public sealed class TraceXClient : IDisposable, IAsyncDisposable
             CreateCrashEvent(
                 exception,
                 breadcrumbs);
+
+        RequestEnqueued?.Invoke(crash);
 
         if (!_channel.Writer.TryWrite(
                 crash))
@@ -301,6 +312,9 @@ public sealed class TraceXClient : IDisposable, IAsyncDisposable
 
         return new CrashEventRequest
         {
+            ProjectKey =
+                _options.ProjectKey,
+
             OccurredAt =
                 DateTime.UtcNow,
 
@@ -311,8 +325,9 @@ public sealed class TraceXClient : IDisposable, IAsyncDisposable
                 "csharp",
 
             ExceptionType =
-                exception.GetType().FullName
-                ?? exception.GetType().Name,
+                Clamp(
+                    exception.GetType().FullName ?? exception.GetType().Name,
+                    150) ?? "Unknown",
 
             ErrorMessage =
                 TraceXDataSanitizer.Sanitize(

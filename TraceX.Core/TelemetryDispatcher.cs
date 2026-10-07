@@ -1,4 +1,4 @@
-﻿using System.Threading.Channels;
+using System.Threading.Channels;
 
 namespace TraceX.Core;
 
@@ -57,6 +57,11 @@ public sealed class TelemetryDispatcher
         {
             throw;
         }
+        catch (InvalidOperationException)
+        {
+            // Permanent client error (e.g., 400, 401, 403, 404). Discard without requeuing.
+            return false;
+        }
         catch (Exception)
         {
             _offlineBuffer.Enqueue(crash);
@@ -86,6 +91,11 @@ public sealed class TelemetryDispatcher
             {
                 _offlineBuffer.Enqueue(cachedCrash);
                 throw;
+            }
+            catch (InvalidOperationException)
+            {
+                // Permanent client error (e.g., 400, 401, 403, 404). Discard without requeuing.
+                continue;
             }
             catch (Exception)
             {

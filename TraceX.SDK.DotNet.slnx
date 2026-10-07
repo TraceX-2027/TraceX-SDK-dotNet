@@ -4,5 +4,6 @@
   </Folder>
   <Project Path="TraceX.AspNetCore/TraceX.AspNetCore.csproj" />
   <Project Path="TraceX.Core/TraceX.Core.csproj" />
+  <Project Path="TraceX.Samples.Api/TraceX.Samples.Api.csproj" />
   <Project Path="TraceX.SDK.Tests/TraceX.SDK.Tests.csproj" Id="a858fc32-75de-4a60-b6b7-28cbab767e4c" />
 </Solution>

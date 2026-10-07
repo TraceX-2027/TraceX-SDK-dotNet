@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using System.Runtime.InteropServices;
 
 namespace TraceX.Core;
@@ -8,13 +8,19 @@ public sealed class TraceXTelemetryContext
     private const int MaxEnvironmentFieldLength = 50;
 
     public string AppVersion { get; init; } =
-        GetAppVersion();
+        Clamp(
+            GetAppVersion(),
+            50);
 
     public string DeviceModel { get; init; } =
-        GetDeviceModel();
+        Clamp(
+            GetDeviceModel(),
+            100);
 
     public string RuntimeVersion { get; init; } =
-        Environment.Version.ToString();
+        Clamp(
+            Environment.Version.ToString(),
+            100);
 
     public string OsName { get; init; } =
         Clamp(
@@ -22,7 +28,9 @@ public sealed class TraceXTelemetryContext
             MaxEnvironmentFieldLength);
 
     public string OsVersion { get; init; } =
-        Environment.OSVersion.Version.ToString();
+        Clamp(
+            Environment.OSVersion.Version.ToString(),
+            50);
 
     public string Hostname { get; init; } =
         Environment.MachineName;
@@ -41,13 +49,19 @@ public sealed class TraceXTelemetryContext
         return new TraceXTelemetryContext
         {
             AppVersion =
-                GetAppVersion(),
+                Clamp(
+                    GetAppVersion(),
+                    50),
 
             DeviceModel =
-                GetDeviceModel(),
+                Clamp(
+                    GetDeviceModel(),
+                    100),
 
             RuntimeVersion =
-                Environment.Version.ToString(),
+                Clamp(
+                    Environment.Version.ToString(),
+                    100),
 
             OsName =
                 Clamp(
@@ -55,7 +69,9 @@ public sealed class TraceXTelemetryContext
                     MaxEnvironmentFieldLength),
 
             OsVersion =
-                Environment.OSVersion.Version.ToString(),
+                Clamp(
+                    Environment.OSVersion.Version.ToString(),
+                    50),
 
             Hostname =
                 Environment.MachineName,

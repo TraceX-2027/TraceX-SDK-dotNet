@@ -9,6 +9,8 @@ public sealed class TraceXOptions
 
     public bool EnableLogging { get; set; } = false;
 
+    public bool DisableGzip { get; set; } = false;
+
     public string Environment { get; set; } = "Production";
 
     public void Validate()

@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using TraceX.Core;
@@ -44,19 +44,33 @@ public class TraceXMiddleware
         {
             await _next(context);
 
-            AddRequestBreadcrumb(
-                context,
-                breadcrumbBuffer,
-                stopwatch.ElapsedMilliseconds,
-                context.Response.StatusCode);
+            try
+            {
+                AddRequestBreadcrumb(
+                    context,
+                    breadcrumbBuffer,
+                    stopwatch.ElapsedMilliseconds,
+                    context.Response.StatusCode);
+            }
+            catch
+            {
+                // Ignore
+            }
         }
         catch (Exception exception)
         {
-            AddRequestBreadcrumb(
-                context,
-                breadcrumbBuffer,
-                stopwatch.ElapsedMilliseconds,
-                StatusCodes.Status500InternalServerError);
+            try
+            {
+                AddRequestBreadcrumb(
+                    context,
+                    breadcrumbBuffer,
+                    stopwatch.ElapsedMilliseconds,
+                    StatusCodes.Status500InternalServerError);
+            }
+            catch
+            {
+                // Ignore
+            }
 
             if (!context.Items.ContainsKey(
                     ExceptionCapturedItemKey))
