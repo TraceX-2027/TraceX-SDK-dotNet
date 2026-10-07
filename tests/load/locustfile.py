@@ -29,8 +29,15 @@ def on_test_stop(environment, **kwargs):
         print(f"p99:   {p99:.2f}")
         print(f"-------------------------------------------\n")
 
+@events.init_command_line_parser.add_listener
+def _(parser):
+    parser.add_argument("--throughput", type=float, env_var="LOCUST_THROUGHPUT_PER_VU", default=0.6666, help="Target throughput per VU")
+
 class ValidCrashUser(HttpUser):
-    wait_time = constant_throughput(float(os.environ.get("LOCUST_THROUGHPUT_PER_VU", "0.666")))
+    def wait_time(self):
+        if not hasattr(self, "_wait_time_func"):
+            self._wait_time_func = constant_throughput(self.environment.parsed_options.throughput)
+        return self._wait_time_func(self)
 
     def on_start(self):
         self.project_key = os.environ.get("TRACEX_PROJECT_KEY")
