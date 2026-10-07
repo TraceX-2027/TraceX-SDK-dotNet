@@ -1,20 +1,43 @@
 import os
-import json
-import time
-import re
 from datetime import datetime, timezone
-from locust import HttpUser, task, constant_throughput
+from locust import HttpUser, task, constant_throughput, events
 
-class TraceXLoadUser(HttpUser):
+server_latencies = []
+
+def percentile(data, p):
+    if not data:
+        return 0
+    data = sorted(data)
+    n = len(data)
+    k = (n - 1) * p / 100.0
+    f = int(k)
+    c = f + 1
+    if c >= n:
+        return data[-1]
+    return data[f] + (k - f) * (data[c] - data[f])
+
+@events.test_stop.add_listener
+def on_test_stop(environment, **kwargs):
+    if len(server_latencies) > 0:
+        p50 = percentile(server_latencies, 50)
+        p95 = percentile(server_latencies, 95)
+        p99 = percentile(server_latencies, 99)
+        print(f"\n--- Server-Side Processing Latency (ms) ---")
+        print(f"Count: {len(server_latencies)}")
+        print(f"p50:   {p50:.2f}")
+        print(f"p95:   {p95:.2f}")
+        print(f"p99:   {p99:.2f}")
+        print(f"-------------------------------------------\n")
+
+class ValidCrashUser(HttpUser):
     wait_time = constant_throughput(float(os.environ.get("LOCUST_THROUGHPUT_PER_VU", "0.666")))
 
     def on_start(self):
         self.project_key = os.environ.get("TRACEX_PROJECT_KEY")
         if not self.project_key:
             raise Exception("TRACEX_PROJECT_KEY environment variable is required")
-        self.invalid_key = "invalid_key_for_testing"
 
-    @task(9)
+    @task
     def valid_crash_report(self):
         payload = {
             "project_key": self.project_key,
@@ -51,40 +74,33 @@ class TraceXLoadUser(HttpUser):
             "X-TraceX-Key": self.project_key
         }
 
-        start_time = time.time()
-        with self.client.post("/api/v1/crashes", json=payload, headers=headers, catch_response=True) as response:
+        with self.client.post("/api/v1/crashes", json=payload, headers=headers, catch_response=True, timeout=10, name="/api/v1/crashes [valid]") as response:
             server_latency = None
-            if "x-response-time-ms" in response.headers:
-                server_latency = float(response.headers["x-response-time-ms"])
+            try:
+                if "x-response-time-ms" in response.headers:
+                    server_latency = float(response.headers["x-response-time-ms"])
+            except (ValueError, TypeError):
+                server_latency = None
 
             if response.status_code == 202:
                 response.success()
                 if server_latency is not None:
-                    self.environment.events.request.fire(
-                        request_type="SERVER_LATENCY",
-                        name="HTTP 202 Accepted",
-                        response_time=server_latency,
-                        response_length=len(response.content) if response.content else 0,
-                        exception=None,
-                        context=None
-                    )
+                    server_latencies.append(server_latency)
             elif response.status_code == 429:
                 if "Retry-After" in response.headers:
                     response.success()
-                    self.environment.events.request.fire(
-                        request_type="SERVER_LATENCY",
-                        name="HTTP 429 Rate Limited",
-                        response_time=server_latency if server_latency else 0,
-                        response_length=len(response.content) if response.content else 0,
-                        exception=None,
-                        context=None
-                    )
                 else:
                     response.failure("429 missing Retry-After header")
             else:
                 response.failure(f"Unexpected status code {response.status_code}")
 
-    @task(1)
+class InvalidKeyUser(HttpUser):
+    wait_time = constant_throughput(1.0)
+
+    def on_start(self):
+        self.invalid_key = "invalid_key_for_testing"
+
+    @task
     def invalid_project_key(self):
         payload = {
             "project_key": self.invalid_key,
@@ -108,10 +124,8 @@ class TraceXLoadUser(HttpUser):
             "X-TraceX-Key": self.invalid_key
         }
 
-        with self.client.post("/api/v1/crashes", json=payload, headers=headers, catch_response=True) as response:
-            if response.status_code in [400, 401, 403]:
-                response.success()
-            elif response.status_code == 429:
+        with self.client.post("/api/v1/crashes", json=payload, headers=headers, catch_response=True, timeout=10, name="/api/v1/crashes [invalid_key]") as response:
+            if response.status_code == 401:
                 response.success()
             else:
-                response.failure(f"Expected auth failure, got {response.status_code}")
+                response.failure(f"Expected 401 Unauthorized, got {response.status_code}")

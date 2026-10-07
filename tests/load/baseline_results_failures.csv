@@ -1,2 +1,0 @@
-Method,Name,Error,Occurrences,First Seen,Last Seen
-POST,/api/v1/crashes,CatchResponseError('Unexpected status code 503'),1,2026-10-06T06:57:13Z,2026-10-06T06:57:13Z
