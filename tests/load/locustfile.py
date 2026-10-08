@@ -16,6 +16,10 @@ def percentile(data, p):
         return data[-1]
     return data[f] + (k - f) * (data[c] - data[f])
 
+@events.test_start.add_listener
+def on_test_start(environment, **kwargs):
+    server_latencies.clear()
+
 @events.test_stop.add_listener
 def on_test_stop(environment, **kwargs):
     if len(server_latencies) > 0:

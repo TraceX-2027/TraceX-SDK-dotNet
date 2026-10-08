@@ -27,3 +27,4 @@ locust -f "$LOCUST_FILE" --headless --users 50 --spawn-rate 50 --run-time 15m --
 
 echo -e "\nAll tests completed successfully."
 exit 0
+
