@@ -1,0 +1,295 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "TraceX SDK Application Test";
+}
+
+<div class="container-fluid py-4" style="max-width: 1200px;">
+    <!-- Header -->
+    <div class="mb-4 border-bottom pb-3 d-flex justify-content-between align-items-end">
+        <div>
+            <h1 class="display-6 fw-bold text-body mb-1">TraceX SDK Application Test</h1>
+            <p class="text-muted mb-0">Real application integration test for the TraceX .NET SDK.</p>
+        </div>
+        <div>
+            <button id="themeToggleBtn" class="btn btn-outline-dark btn-sm d-flex align-items-center">
+                <span id="themeIcon" class="me-1">☾</span> <span id="themeText">Dark Mode</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Left Column: Controls & Status -->
+        <div class="col-lg-5">
+            <!-- Status Card -->
+            <div class="card shadow-sm border-0 mb-4 rounded-3">
+                <div class="card-body d-flex align-items-center justify-content-between">
+                    <div>
+                        <h5 class="card-title fw-bold mb-0">SDK Status</h5>
+                        <small class="text-muted">TraceX.AspNetCore Middleware</small>
+                    </div>
+                    <div class="d-flex align-items-center bg-success bg-opacity-10 px-3 py-2 rounded-pill">
+                        <span class="text-success me-2">●</span>
+                        <span class="text-success fw-bold">Initialized</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Controls Card -->
+            <div class="card shadow-sm border-0 rounded-3">
+                <div class="card-header bg-transparent border-bottom-0 pt-4 pb-0">
+                    <h5 class="card-title fw-bold">Test Controls</h5>
+                </div>
+                <div class="card-body">
+                    <form id="testForm" method="post">
+                        @Html.AntiForgeryToken()
+                        
+                        <div class="d-grid gap-3 mb-4">
+                            <button type="button" id="btnAddBreadcrumb" class="btn btn-outline-primary btn-lg d-flex align-items-center justify-content-center" data-original="Add Test Breadcrumb">
+                                Add Test Breadcrumb
+                            </button>
+                            
+                            <button type="button" id="btnTriggerCrash" class="btn btn-danger btn-lg d-flex align-items-center justify-content-center shadow-sm" data-original="Trigger Test Crash">
+                                Trigger Test Crash
+                            </button>
+                        </div>
+                        
+                        <hr class="text-muted opacity-25">
+                        
+                        <div class="d-grid">
+                            <button type="button" id="btnClear" class="btn btn-light btn-sm text-muted border" data-original="Clear Test View">
+                                Clear Test View
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Timeline & Crash Context -->
+        <div class="col-lg-7">
+            <!-- Timeline Card -->
+            <div class="card shadow-sm border-0 rounded-3 mb-4">
+                <div class="card-header bg-transparent border-bottom-0 pt-4 pb-0 d-flex justify-content-between align-items-center">
+                    <h5 class="card-title fw-bold">Recent Breadcrumbs</h5>
+                    <span class="badge bg-primary rounded-pill" id="breadcrumbCount">0</span>
+                </div>
+                <div class="card-body">
+                    <div id="breadcrumbTimeline" class="position-relative ps-4 border-start border-primary border-2 ms-2 py-2">
+                        <div class="text-muted small fst-italic" id="emptyTimeline">No breadcrumbs recorded yet.</div>
+                        <!-- JS injects timeline items here -->
+                    </div>
+                    
+                    <div id="crashContextIndicator" class="text-center mt-3 text-muted d-none">
+                        <div class="fs-4 text-danger mb-1">↓</div>
+                        <div class="small text-danger fw-bold text-uppercase" style="letter-spacing: 1px;">Crash Context</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Last Crash Card -->
+            <div class="card shadow-sm border-0 rounded-3 border-top border-danger border-4">
+                <div class="card-header bg-transparent border-bottom-0 pt-4 pb-0">
+                    <h5 class="card-title fw-bold">Last Test Crash</h5>
+                </div>
+                <div class="card-body" id="lastCrashBody">
+                    <div class="text-muted small fst-italic" id="noCrashState">No test crash triggered yet.</div>
+                    
+                    <div id="crashDetailsState" class="d-none">
+                        <div class="mb-3 d-flex align-items-center">
+                            <span class="badge bg-danger me-2">Captured</span>
+                            <span class="text-muted small" id="crashTime"></span>
+                        </div>
+                        
+                        <div class="bg-body-secondary p-3 rounded mb-3 font-monospace small">
+                            <div class="fw-bold text-body mb-1" id="crashType"></div>
+                            <div class="text-danger" id="crashMessage"></div>
+                        </div>
+                        
+                        <div class="row g-2 small mb-4">
+                            <div class="col-6">
+                                <div class="text-muted">Capture Pipeline:</div>
+                                <div class="fw-bold">TraceXMiddleware</div>
+                            </div>
+                            <div class="col-6">
+                                <div class="text-muted">Dispatch:</div>
+                                <div class="fw-bold">Asynchronous</div>
+                            </div>
+                        </div>
+
+                        <!-- Result UX panel -->
+                        <div class="p-3 border border-success rounded bg-success bg-opacity-10 d-none" id="crashResultPanel">
+                            <h6 class="text-success fw-bold mb-2">Test Crash Triggered</h6>
+                            <p class="small mb-3">HTTP 500 received from application as expected.</p>
+                            <div class="d-flex justify-content-between small">
+                                <div><span class="text-muted">TraceX capture:</span> <span class="fw-bold">Confirmed</span></div>
+                                <div><span class="text-muted">TraceX dispatch:</span> <span class="fw-bold">Background queue</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Theme Management
+        const htmlElement = document.documentElement;
+        const themeToggleBtn = document.getElementById('themeToggleBtn');
+        const themeIcon = document.getElementById('themeIcon');
+        const themeText = document.getElementById('themeText');
+        
+        function updateThemeUI(theme) {
+            if (theme === 'dark') {
+                themeIcon.textContent = '☀';
+                themeText.textContent = 'Light Mode';
+                themeToggleBtn.classList.replace('btn-outline-dark', 'btn-outline-light');
+            } else {
+                themeIcon.textContent = '☾';
+                themeText.textContent = 'Dark Mode';
+                themeToggleBtn.classList.replace('btn-outline-light', 'btn-outline-dark');
+            }
+        }
+
+        const savedTheme = localStorage.getItem('tracex-theme') || 'light';
+        htmlElement.setAttribute('data-bs-theme', savedTheme);
+        updateThemeUI(savedTheme);
+
+        themeToggleBtn.addEventListener('click', () => {
+            const currentTheme = htmlElement.getAttribute('data-bs-theme');
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            htmlElement.setAttribute('data-bs-theme', newTheme);
+            localStorage.setItem('tracex-theme', newTheme);
+            updateThemeUI(newTheme);
+        });
+
+        // App State Management
+        async function fetchState() {
+            try {
+                const response = await fetch('?handler=State');
+                const state = await response.json();
+                renderState(state);
+            } catch (err) {
+                console.error("Failed to fetch state", err);
+            }
+        }
+
+        function renderState(state) {
+            const timeline = document.getElementById('breadcrumbTimeline');
+            const emptyTimeline = document.getElementById('emptyTimeline');
+            const count = document.getElementById('breadcrumbCount');
+            
+            count.textContent = state.breadcrumbs.length;
+            
+            if (state.breadcrumbs.length === 0) {
+                emptyTimeline.classList.remove('d-none');
+                timeline.innerHTML = '';
+                timeline.appendChild(emptyTimeline);
+            } else {
+                emptyTimeline.classList.add('d-none');
+                timeline.innerHTML = '';
+                state.breadcrumbs.forEach((bc, idx) => {
+                    const isNewest = idx === state.breadcrumbs.length - 1;
+                    const bgClass = isNewest ? 'bg-primary text-white' : 'bg-body-secondary text-body';
+                    const dotClass = isNewest ? 'text-primary' : 'text-muted';
+                    
+                    const time = new Date(bc.timestamp).toLocaleTimeString();
+                    const targetText = (bc.data && bc.data.target) ? bc.data.target : '-';
+                    const actionText = (bc.data && bc.data.action) ? bc.data.action : bc.message;
+                    
+                    const html = `
+                        <div class="position-relative mb-3 ps-3">
+                            <div class="position-absolute start-0 translate-middle-x bg-body ${dotClass}" style="top: 0; padding: 2px;">●</div>
+                            <div class="small fw-bold text-muted mb-1">${time}</div>
+                            <div class="p-2 rounded ${bgClass} shadow-sm small">
+                                <div><span class="opacity-75">category:</span> ${bc.type}</div>
+                                <div><span class="opacity-75">action:</span> ${actionText}</div>
+                                <div><span class="opacity-75">target:</span> ${targetText}</div>
+                            </div>
+                        </div>
+                    `;
+                    timeline.insertAdjacentHTML('beforeend', html);
+                });
+            }
+
+            const noCrash = document.getElementById('noCrashState');
+            const crashDetails = document.getElementById('crashDetailsState');
+            const contextIndicator = document.getElementById('crashContextIndicator');
+            const resultPanel = document.getElementById('crashResultPanel');
+            
+            if (!state.lastCrash) {
+                noCrash.classList.remove('d-none');
+                crashDetails.classList.add('d-none');
+                contextIndicator.classList.add('d-none');
+                resultPanel.classList.add('d-none');
+            } else {
+                noCrash.classList.add('d-none');
+                crashDetails.classList.remove('d-none');
+                contextIndicator.classList.remove('d-none');
+                
+                document.getElementById('crashTime').textContent = new Date(state.lastCrash.timestamp).toLocaleTimeString();
+                document.getElementById('crashType').textContent = state.lastCrash.exceptionType;
+                document.getElementById('crashMessage').textContent = state.lastCrash.message;
+                
+                // Keep result panel visible if we have a crash
+                resultPanel.classList.remove('d-none');
+            }
+        }
+
+        function setLoading(btn, isLoading) {
+            if (isLoading) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Processing...';
+            } else {
+                btn.disabled = false;
+                if (btn.getAttribute('data-original')) {
+                    btn.innerHTML = btn.getAttribute('data-original');
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchState(); // Initial load
+
+            document.getElementById('btnAddBreadcrumb').addEventListener('click', async function() {
+                setLoading(this, true);
+                const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+                const formData = new FormData();
+                formData.append('__RequestVerificationToken', token);
+                
+                await fetch('?handler=AddBreadcrumb', { method: 'POST', body: formData });
+                await fetchState();
+                setLoading(this, false);
+            });
+
+            document.getElementById('btnTriggerCrash').addEventListener('click', async function() {
+                setLoading(this, true);
+                const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+                const formData = new FormData();
+                formData.append('__RequestVerificationToken', token);
+                
+                const response = await fetch('?handler=TriggerCrash', { method: 'POST', body: formData });
+                await fetchState();
+                
+                if (response.status === 500) {
+                    document.getElementById('crashResultPanel').classList.remove('d-none');
+                }
+                
+                setLoading(this, false);
+            });
+
+            document.getElementById('btnClear').addEventListener('click', async function() {
+                setLoading(this, true);
+                const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+                const formData = new FormData();
+                formData.append('__RequestVerificationToken', token);
+                
+                await fetch('?handler=Clear', { method: 'POST', body: formData });
+                await fetchState();
+                setLoading(this, false);
+            });
+        });
+    </script>
+}
