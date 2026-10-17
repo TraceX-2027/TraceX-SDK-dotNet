@@ -5,7 +5,7 @@ public sealed class TraceXOptions
     public string ProjectKey { get; set; } = string.Empty;
 
     public string Endpoint { get; set; } =
-        "https://tracex-api.kareemadel.com/api/v1/";
+        "https://api.tracex.dev/api/v1/";
 
     public bool EnableLogging { get; set; } = false;
 

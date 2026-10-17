@@ -6,7 +6,7 @@ if [ -z "${TRACEX_PROJECT_KEY:-}" ]; then
     exit 1
 fi
 
-HOST_URL="${TRACEX_API_HOST:-https://tracex-api.kareemadel.com}"
+HOST_URL="${TRACEX_API_HOST:-https://api.tracex.dev}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOCUST_FILE="$SCRIPT_DIR/locustfile.py"
 REPORTS_DIR="$SCRIPT_DIR/reports"

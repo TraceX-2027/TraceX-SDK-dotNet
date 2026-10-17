@@ -7,7 +7,7 @@ if (-not $env:TRACEX_PROJECT_KEY) {
 
 $HostUrl = $env:TRACEX_API_HOST
 if (-not $HostUrl) {
-    $HostUrl = "https://tracex-api.kareemadel.com"
+    $HostUrl = "https://api.tracex.dev"
 }
 
 $ScriptDir = $PSScriptRoot
