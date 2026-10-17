@@ -1,0 +1,4 @@
+*.csv
+reports/
+__pycache__/
+*.pyc
