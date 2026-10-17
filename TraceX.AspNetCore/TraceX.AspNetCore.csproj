@@ -4,6 +4,15 @@
 		<TargetFrameworks>net8.0;net9.0</TargetFrameworks>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
+		<PackageId>TraceX.AspNetCore</PackageId>
+		<Version>1.0.0</Version>
+		<Authors>TraceX</Authors>
+		<Description>Official TraceX ASP.NET Core middleware and exception boundary SDK for real-time crash capture and forensic telemetry.</Description>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<RepositoryUrl>https://github.com/TraceX-2027/TraceX-SDK-dotNet</RepositoryUrl>
+		<PackageProjectUrl>https://tracex.dev</PackageProjectUrl>
+		<PackageTags>tracex;aspnetcore;monitoring;crash;telemetry;middleware</PackageTags>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -11,7 +20,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <ProjectReference Include="..\TraceX.Core\TraceX.Core.csproj" />
+		<ProjectReference Include="..\TraceX.Core\TraceX.Core.csproj" />
+		<None Include="..\README.md" Pack="true" PackagePath="\" />
 	</ItemGroup>
 
 </Project>

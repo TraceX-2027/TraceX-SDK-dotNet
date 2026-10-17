@@ -4,6 +4,19 @@
     <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <PackageId>TraceX.Core</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>TraceX</Authors>
+    <Description>Core client and protocol engine for TraceX telemetry, exception tracking, and crash monitoring.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/TraceX-2027/TraceX-SDK-dotNet</RepositoryUrl>
+    <PackageProjectUrl>https://tracex.dev</PackageProjectUrl>
+    <PackageTags>tracex;monitoring;crash;telemetry;observability</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
 </Project>
